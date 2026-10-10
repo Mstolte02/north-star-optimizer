@@ -25,6 +25,8 @@ Live site: https://mstolte02.github.io/north-star-optimizer/
 
 Live browser checks confirmed the default optimizer result, goal changes, priority reordering, salary locks and scenario persistence across reload. Desktop viewport 1363px had no horizontal overflow (document width 1348px). A deployment screenshot is saved in docs/north-star-live.jpg. No application-origin console errors were observed; browser extension metadata errors were unrelated to the app. Actual iPhone rendering and browser reduced-motion rendering remain unverified.
 
+A competing branch-based Pages deployment subsequently published the source HTML and caused a blank page. The compiled artifact was redeployed, and the repository owner switched Pages Source to GitHub Actions. This documentation update also verifies that subsequent main pushes use the intended workflow.
+
 Dependency audit after updating Vitest to 5.0.3: zero reported vulnerabilities.
 
 ## Material planning limitations
