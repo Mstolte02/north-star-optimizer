@@ -1812,6 +1812,271 @@ button.on-dark:hover {
   height: 16px;
 }
 
+/* Journey */
+.spacer {
+  flex: 1;
+}
+.journey {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.journey-progress {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.journey-progress button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.journey-progress button:hover {
+  background: var(--surface-2);
+}
+.journey-progress .step-dot {
+  flex: none;
+  border-color: var(--line-strong);
+}
+.journey-progress li[aria-current="step"] button {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.journey-progress li[aria-current="step"] .step-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.journey-progress li.done button {
+  color: var(--ink-2);
+}
+.journey-progress li.done .step-dot {
+  background: var(--good-soft);
+  border-color: transparent;
+  color: var(--good);
+}
+.journey-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+.journey-nav .primary {
+  min-height: 46px;
+  padding: 0 22px;
+}
+.way.is-picked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  background: var(--surface);
+}
+.way:first-child:not(.is-picked) {
+  border-color: var(--line);
+  box-shadow: none;
+  background: var(--surface-2);
+}
+.way button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.way-note {
+  color: var(--ink-2);
+  font-size: 0.9rem;
+}
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 24px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border-left: 4px solid var(--line-strong);
+}
+.preview span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+.preview strong {
+  font-size: 1.05rem;
+}
+.preview-good {
+  border-left-color: var(--good);
+}
+.preview-warn {
+  border-left-color: var(--warn);
+}
+.apply-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.plan-hero {
+  padding: clamp(24px, 4vw, 40px);
+  border-radius: calc(var(--radius) + 4px);
+  color: #eef1f8;
+  background:
+    radial-gradient(
+      circle at 90% 0%,
+      rgba(227, 160, 43, 0.22),
+      transparent 40%
+    ),
+    linear-gradient(150deg, var(--night-2), var(--night));
+  box-shadow: var(--shadow);
+}
+.plan-hero .kicker {
+  color: #f2b84b;
+}
+.plan-hero h1 {
+  margin: 10px 0;
+  color: #fff;
+  font-size: clamp(1.8rem, 1.1rem + 2.6vw, 2.8rem);
+  letter-spacing: -0.03em;
+}
+.plan-hero p {
+  color: #c3cadd;
+}
+.plan-numbers {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.plan-numbers > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.plan-numbers > div:first-child {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.plan-numbers dt {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.plan-numbers dd {
+  margin: 0;
+  font-family: "Inter Tight", "Inter", sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.plan-numbers dd.plan-note {
+  font-family: inherit;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  font-size: 0.78rem;
+}
+.milestones {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 18px;
+  border-left: 2px solid var(--line);
+  display: grid;
+  gap: 16px;
+}
+.milestones li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.milestones li::before {
+  content: "";
+  position: absolute;
+  left: -25px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+.milestones li.milestone-end::before {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+.milestones span {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.milestones strong {
+  font-variant-numeric: tabular-nums;
+}
+.checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.checklist li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 0.93rem;
+}
+.checklist input {
+  flex: none;
+  margin-top: 2px;
+}
+@media print {
+  .topbar,
+  .tabs,
+  .footer,
+  .journey-progress,
+  .journey-nav,
+  .toast {
+    display: none !important;
+  }
+  body,
+  .app {
+    background: #fff;
+  }
+  .plan-hero {
+    color: #000;
+    background: none;
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+  .plan-hero h1,
+  .plan-hero p,
+  .plan-hero .kicker {
+    color: #000;
+  }
+  .card,
+  .plan-numbers > div {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+
 /* Responsive */
 @media (max-width: 960px) {
   .goal-panel,
@@ -1829,6 +2094,9 @@ button.on-dark:hover {
   }
   .landing-points {
     grid-template-columns: 1fr;
+  }
+  .plan-numbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .next-steps {
     grid-template-columns: 1fr;
@@ -1905,6 +2173,15 @@ button.on-dark:hover {
   }
   .sliders {
     grid-template-columns: 1fr;
+  }
+  .journey-progress button {
+    flex-direction: column;
+    gap: 4px;
+    min-height: 56px;
+    padding: 6px 2px;
+    font-size: 0.72rem;
+    justify-content: center;
+    text-align: center;
   }
   .scenario {
     flex-wrap: wrap;

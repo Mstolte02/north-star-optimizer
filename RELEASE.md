@@ -1,5 +1,13 @@
 # Release notes
 
+## 2.2 — plan wizard (2026-10-09)
+
+- Results is now a four-step wizard: Your answer, Pick a path, Fine-tune, Your plan.
+- Sliders edit a draft with a live one-line preview; the chart and options only change after Apply changes.
+- New final action plan: target date, monthly saving target, cash needed at closing, savings milestones, a checklist, Save and Print.
+- The working plan is kept across reloads, separate from the setup answers.
+- Notices close on their own after four seconds.
+
 ## 2.1 — guided journey (2026-10-09)
 
 - New landing page that states the value in one line.

@@ -7,6 +7,7 @@ import {
 } from "./model";
 export const STORAGE = "north-star.scenarios.v1";
 export const STARTING_PLAN = "north-star.starting-plan.v1";
+export const CURRENT_PLAN = "north-star.current-plan.v1";
 const numericBounds: Record<string, [number, number]> = {
   salary: [0, 10000000],
   partnerSalary: [0, 10000000],

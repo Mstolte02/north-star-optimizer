@@ -1,4 +1,4 @@
-import { evaluate, maxPrice, salaryThreshold } from "./engine";
+import { adjustedProfile, evaluate, maxPrice, salaryThreshold } from "./engine";
 import { questionFor, type Profile, type Scenario } from "./model";
 import { money, monthLabel } from "./Chart";
 
@@ -113,8 +113,8 @@ export function verdict(s: Scenario): Verdict {
           gap > 0
             ? `That's ${money(gap)} more than you earn today.`
             : `You already earn enough, with ${money(-gap)} a year to spare.`,
-        tone: gap > 0 ? "warn" : "good",
-        profile: p,
+        tone: "good",
+        profile: gap > 0 ? adjustedProfile(s, { salary: need }) : p,
       };
     }
     default: {

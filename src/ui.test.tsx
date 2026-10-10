@@ -55,29 +55,74 @@ const pathsReady = () =>
       screen.getAllByRole("button", { name: "Choose this path" }).length,
     ).toBeGreaterThan(0),
   );
+const nextFromAnswer = () =>
+  fireEvent.click(screen.getByRole("button", { name: /See ways to/ }));
 
-describe("results page", () => {
+describe("plan journey", () => {
   it("answers the question in one sentence with no accessibility issues", async () => {
     render(<App />);
-    expect(verdictText()).toMatch(/You can buy a \$300,000 home in/);
-    await pathsReady();
+    expect(screen.getByRole("list", { name: "Plan progress" })).toBeTruthy();
+    expect(verdictText()).toContain("You can buy a $300,000 home in");
     await noAxeViolations();
   }, 15000);
-  it("updates the answer live when a slider moves, and applies a chosen path", async () => {
+  it("applies a chosen path when moving on", async () => {
     render(<App />);
-    const before = verdictText();
-    fireEvent.change(screen.getByRole("slider", { name: /Your salary/ }), {
-      target: { value: "140000" },
-    });
-    expect(verdictText()).not.toBe(before);
+    nextFromAnswer();
+    expect(verdictText()).toBe("Pick a way to get there");
     await pathsReady();
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Choose this path" })[0],
-    );
+    const choose = screen.getAllByRole("button", {
+      name: "Choose this path",
+    })[0];
+    fireEvent.click(choose);
+    expect(choose.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: /Next: fine-tune/ }));
     expect(screen.getByRole("status").textContent).toContain(
       "is now your plan",
     );
+    expect(verdictText()).toBe("Fine-tune your plan");
   });
+  it("keeps slider moves as a preview until they are applied", async () => {
+    render(<App />);
+    nextFromAnswer();
+    await pathsReady();
+    fireEvent.click(screen.getByRole("button", { name: /Next: fine-tune/ }));
+    const apply = screen.getByRole("button", { name: "Apply changes" });
+    expect((apply as HTMLButtonElement).disabled).toBe(true);
+    const before = screen.getByText(/^You can buy/).textContent;
+    fireEvent.change(screen.getByRole("slider", { name: /Your salary/ }), {
+      target: { value: "140000" },
+    });
+    expect(screen.getByText("With these changes")).toBeTruthy();
+    expect(screen.getByText(/^You can buy/).textContent).not.toBe(before);
+    expect((apply as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(apply);
+    expect(screen.getByText("Right now")).toBeTruthy();
+    expect((apply as HTMLButtonElement).disabled).toBe(true);
+    const applied = screen.getByText(/^You can buy/).textContent;
+    cleanup();
+    render(<App />);
+    expect(verdictText()).toBe(applied);
+  });
+  it("ends on a personal action plan that can be saved", async () => {
+    render(<App />);
+    nextFromAnswer();
+    await pathsReady();
+    fireEvent.click(screen.getByRole("button", { name: /Next: fine-tune/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Next: build my plan/ }),
+    );
+    expect(verdictText()).toContain("Buy a $300,000 home in ");
+    expect(screen.getByRole("heading", { name: "Milestones" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Your checklist" }),
+    ).toBeTruthy();
+    expect(screen.getByText(/Set up an automatic transfer of/)).toBeTruthy();
+    await noAxeViolations();
+    fireEvent.click(screen.getByRole("button", { name: "Save my plan" }));
+    expect(
+      JSON.parse(localStorage.getItem("north-star.scenarios.v1")!).length,
+    ).toBe(1);
+  }, 15000);
   it("switches questions in place", () => {
     render(<App />);
     fireEvent.click(
@@ -114,8 +159,8 @@ describe("advanced pages", () => {
   });
   it("supports saving, opening and duplicating a scenario", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Save this plan" }));
     fireEvent.click(screen.getByRole("button", { name: /Saved/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Save current plan/ }));
     expect(screen.getByRole("heading", { name: "My first home" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
     expect(

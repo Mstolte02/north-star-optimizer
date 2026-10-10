@@ -14,8 +14,9 @@ Live site: https://mstolte02.github.io/north-star-optimizer/
 2. **Four short steps** — income, spending, savings and the home. Example numbers are filled in; replace them with yours.
 3. **Get a straight answer** — one sentence, such as "You can buy a $300,000 home in Dec 2030", with the monthly cost and the cash left after closing.
 4. **See ways to get there** — two to four options that pass all your limits (earn a bit more, spend less, change the down payment). Choose one to make it your plan.
-5. **Try it yourself** — sliders for salary, flexible spending, price, timing and down payment update the answer instantly.
-6. **Advanced** — every goal, priority ranking and locks, alternative paths and the full math, and every assumption. **Saved** holds scenarios to compare, export and share.
+5. **Fine-tune** — sliders for salary, flexible spending, price, timing and down payment show a live preview; Apply changes updates the plan and chart.
+6. **Your plan** — the finish line: target date, monthly saving target, cash needed at closing, savings milestones and a checklist. Save or print it.
+7. **Advanced** — every goal, priority ranking and locks, alternative paths and the full math, and every assumption. **Saved** holds scenarios to compare, export and share.
 
 ### Goals
 

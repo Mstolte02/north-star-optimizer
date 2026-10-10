@@ -31,6 +31,7 @@ import {
   loadScenarios,
   saveScenarios,
   STARTING_PLAN,
+  CURRENT_PLAN,
 } from "./persistence";
 import { SetupWizard } from "./SetupWizard";
 import { Icon, type IconName } from "./Icon";
@@ -317,7 +318,7 @@ const advanced: { key: Tab; label: string; icon: IconName }[] = [
 ];
 const isAdvanced = (t: Tab) => advanced.some((a) => a.key === t);
 const nav: { key: Tab; label: string; icon: IconName }[] = [
-  { key: "results", label: "Your answer", icon: "star" },
+  { key: "results", label: "Plan", icon: "star" },
   { key: "plan", label: "Advanced", icon: "sliders" },
   { key: "scenarios", label: "Saved", icon: "layers" },
 ];
@@ -325,13 +326,19 @@ function initial() {
   try {
     const shared = decodeShare(window.location.hash);
     const stored = localStorage.getItem(STARTING_PLAN);
+    const current = localStorage.getItem(CURRENT_PLAN);
+    const starting = stored ? validateScenario(JSON.parse(stored)) : null;
+    const working = current ? validateScenario(JSON.parse(current)) : null;
+    const s = shared ?? working ?? starting ?? defaults();
     return {
-      s: shared ?? (stored ? validateScenario(JSON.parse(stored)) : defaults()),
+      s,
+      start: (starting ?? s).profile,
       error: "",
       ready: Boolean(shared || stored),
     };
   } catch (e) {
-    return { s: defaults(), error: (e as Error).message, ready: false };
+    const s = defaults();
+    return { s, start: s.profile, error: (e as Error).message, ready: false };
   }
 }
 function PageHead({
@@ -364,12 +371,28 @@ export default function App() {
     [busy, setBusy] = useState(true),
     [drag, setDrag] = useState<Priority | null>(null),
     [shareFull, setShareFull] = useState(false),
-    [compare, setCompare] = useState<string[]>([]);
+    [compare, setCompare] = useState<string[]>([]),
+    [journey, setJourney] = useState(0),
+    [start, setStart] = useState(init.start);
   const file = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(""), 4000);
+    return () => clearTimeout(t);
+  }, [message]);
   useEffect(() => {
     if (tab !== "setup") document.querySelector<HTMLElement>("main")?.focus();
   }, [tab]);
   const e = useMemo(() => evaluate(s, s.profile, true), [s]);
+  // Keep the working plan across reloads once setup is done.
+  useEffect(() => {
+    if (!setupComplete) return;
+    try {
+      localStorage.setItem(CURRENT_PLAN, JSON.stringify(s));
+    } catch {
+      // Storage blocked; the plan still works for this visit.
+    }
+  }, [s, setupComplete]);
   useEffect(() => {
     try {
       setSaved(loadScenarios());
@@ -643,7 +666,9 @@ export default function App() {
           <Results
             s={s}
             setS={setS}
-            update={update}
+            start={start}
+            step={journey}
+            setStep={setJourney}
             result={result}
             busy={busy}
             onApply={applyPath}
@@ -667,6 +692,8 @@ export default function App() {
               onCancel={setupComplete ? () => go("results") : undefined}
               onComplete={(plan) => {
                 setS(plan);
+                setStart(plan.profile);
+                setJourney(0);
                 setSetupComplete(true);
                 go("results");
                 try {
@@ -1527,6 +1554,7 @@ export default function App() {
                         className="secondary"
                         onClick={() => {
                           setS(item);
+                          setJourney(0);
                           setSetupComplete(true);
                           go("results");
                         }}
