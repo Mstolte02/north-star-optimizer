@@ -32,6 +32,10 @@ This URL is the expected URL, not evidence that a deployment has occurred. See R
 
 ## Planning experience
 
+First visits begin with a four-step setup wizard (income, spending, savings cushion, home goal). Starting plans are validated and remembered in browser-local storage; saved scenarios use their existing storage and remain available. Shared scenario links open directly into the planner. Setup can be revisited from Assumptions without changing the plan until completion.
+
+The workspace is split into **Plan** (goal, results, projection), **Priorities** (ranking, locks and ranges), **Explore** (paths, thresholds, arithmetic and sensitivities), **Assumptions** (editable financial details), and **Scenarios** (saving, comparison and transfer). Calculation methodology is available in the footer.
+
 - Thirteen selectable goals, including house price, monthly savings, purchase deadline, required salary, reserves, net worth and tolerable interest rate.
 - Hard housing, reserve, savings and DTI requirements; explicit locks and ranges for six supported optimization levers.
 - Five ranked preferences with editable tolerances, desktop dragging and touch/keyboard-friendly reorder buttons.

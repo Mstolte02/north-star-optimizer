@@ -1435,3 +1435,99 @@ footer p {
     gap: 8px;
   }
 }
+
+/* Progressive setup and focused pages; retain the existing visual identity. */
+.setup-page {
+  max-width: 760px;
+  margin: 42px auto;
+}
+.setup-page h1,
+.page-heading h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+}
+.setup-page > p {
+  max-width: 620px;
+}
+.setup-progress {
+  display: flex;
+  gap: 22px;
+  padding: 20px 0;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+  color: #777970;
+}
+.setup-progress [aria-current="step"] {
+  color: #2c6e68;
+  font-weight: 700;
+}
+.setup-page .fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 28px 0;
+}
+.setup-page .fields input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #a8bfaf;
+  background: transparent;
+}
+.setup-inclusion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.setup-actions,
+.plan-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 28px 0;
+}
+.setup-actions button,
+.plan-next button {
+  padding: 12px 18px;
+}
+.focused-workspace {
+  display: block;
+}
+.focused-workspace .controls {
+  border-right: none;
+  max-width: 760px;
+  padding: 0;
+}
+.focused-workspace .analysis {
+  border-left: none;
+  padding-left: 0;
+}
+.page-heading {
+  margin: 34px 0;
+}
+.assumptions .section-heading {
+  display: none;
+}
+@media (max-width: 650px) {
+  .site-header {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .site-header nav {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .site-header nav button {
+    font-size: 13px;
+    padding: 8px;
+  }
+  .setup-page {
+    margin: 24px 0;
+  }
+  .setup-page .fields {
+    grid-template-columns: 1fr;
+  }
+  .setup-progress {
+    gap: 12px;
+    font-size: 13px;
+  }
+}
