@@ -86,6 +86,62 @@ export interface Scenario {
   tolerances: Record<Priority, number>;
   preferred: boolean;
 }
+// The plain question a person starts from. Each maps to one objective.
+export type Question = "when" | "afford" | "deadline" | "income";
+export const questions: Record<
+  Question,
+  { title: string; text: string; objective: Objective }
+> = {
+  when: {
+    title: "When can I buy a home?",
+    text: "Find the earliest month you could buy the home you want.",
+    objective: "price",
+  },
+  afford: {
+    title: "How much home can I afford?",
+    text: "Find the highest price that still fits your budget and savings.",
+    objective: "after",
+  },
+  deadline: {
+    title: "Can I buy by a certain date?",
+    text: "Check a deadline and see what it would take to meet it.",
+    objective: "date",
+  },
+  income: {
+    title: "What income do I need?",
+    text: "Find the salary that makes your home plan work.",
+    objective: "salary",
+  },
+};
+export function questionFor(objective: Objective): Question | undefined {
+  return (
+    (Object.keys(questions) as Question[]).find(
+      (q) => questions[q].objective === objective,
+    ) ?? (objective === "payment" ? "afford" : undefined)
+  );
+}
+export function applyQuestion(s: Scenario, q: Question): Scenario {
+  const objective = questions[q].objective;
+  return {
+    ...s,
+
+    objective,
+    mode: objectives[objective].mode,
+    target:
+      objective === "price"
+        ? s.profile.price
+        : objective === "date"
+          ? s.profile.months
+          : objective === "after"
+            ? s.profile.after
+            : objectives[objective].target,
+    ranges: {
+      ...s.ranges,
+      price: { ...s.ranges.price, locked: objective !== "after" },
+      rate: { ...s.ranges.rate, locked: true },
+    },
+  };
+}
 export const objectives: Record<
   Objective,
   {

@@ -468,17 +468,19 @@ function search(s: Scenario, restrict: Lever[] = []): Path | null {
               const diff: string[] = [];
               if (Math.abs(salary - b.salary) > 1)
                 diff.push(
-                  `Salary ${money(salary)} (+${money(salary - b.salary)})`,
+                  `Earn ${money(salary - b.salary)} more a year (${money(salary)} total)`,
                 );
               if (Math.abs(flexibleTarget - b.flexibleTarget) > 1)
-                diff.push(`Flexible spending ${money(flexibleTarget)}/mo`);
+                diff.push(
+                  `Spend ${money(b.flexibleTarget - flexibleTarget)} less a month on extras`,
+                );
               if (months !== b.months) diff.push(`Buy in ${months} months`);
               if (Math.abs(d - b.down) > 0.1)
-                diff.push(`Down payment ${d.toFixed(1)}%`);
+                diff.push(`Put ${d.toFixed(1)}% down`);
               if (Math.abs(price - b.price) > 1)
-                diff.push(`Home price ${money(price)}`);
+                diff.push(`Choose a ${money(price)} home`);
               if (rate !== b.rate)
-                diff.push(`Mortgage rate ${rate.toFixed(2)}%`);
+                diff.push(`Plan for a ${rate.toFixed(2)}% rate`);
               best = {
                 name: "Balanced path",
                 e,

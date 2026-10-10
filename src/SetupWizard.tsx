@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { Profile, Scenario } from "./model";
+import {
+  applyQuestion,
+  questionFor,
+  questions,
+  type Profile,
+  type Question,
+  type Scenario,
+} from "./model";
 import { Icon } from "./Icon";
 
 type Step = {
@@ -77,12 +84,12 @@ const steps: Step[] = [
     name: "Home goal",
     title: "Where are you headed?",
     intro:
-      "Describe the home you want. You can switch to a different goal on the Plan page at any time.",
+      "Describe the home you want. These are estimates; you can change them on the results page.",
     fields: [
       ["price", "Target home price", 1, 10000000],
       ["down", "Down payment (%)", 0, 100],
       ["rate", "Mortgage rate (%)", 0, 30],
-      ["months", "Months until you want to buy", 1, 360],
+      ["months", "Months from now you want to buy", 1, 360],
       [
         "paymentLimit",
         "Most you'd pay for housing per month",
@@ -93,6 +100,15 @@ const steps: Step[] = [
     ],
   },
 ];
+// Fields the home step asks for, by question. "When" finds the month itself;
+// "afford" finds the price itself.
+const homeFields: Record<Question, (keyof Profile)[]> = {
+  when: ["price", "down", "rate", "paymentLimit"],
+  afford: ["down", "rate", "months", "paymentLimit"],
+  deadline: ["price", "down", "rate", "months", "paymentLimit"],
+  income: ["price", "down", "rate", "months", "paymentLimit"],
+};
+const names = ["Question", ...steps.map((x) => x.name)];
 export function SetupWizard({
   scenario,
   onComplete,
@@ -109,13 +125,25 @@ export function SetupWizard({
   useEffect(() => {
     heading.current?.focus();
   }, [step]);
-  const current = steps[step];
+  const q = questionFor(draft.objective) ?? "when";
+  const base = steps[step - 1];
+  const current =
+    base && step === steps.length
+      ? {
+          ...base,
+          fields: base.fields.filter(([k]) => homeFields[q].includes(k)),
+        }
+      : base;
+  const choose = (k: Question) => {
+    setDraft((old) => applyQuestion(old, k));
+    setStep(1);
+  };
   const change = (key: keyof Profile, value: number) =>
     setDraft((old) => ({ ...old, profile: { ...old.profile, [key]: value } }));
   const next = (form: HTMLFormElement) => {
     if (!form.reportValidity()) return;
     const p = draft.profile;
-    if (step >= 1 && p.rent + p.debtPayment + p.flexible > p.expenses) {
+    if (step >= 2 && p.rent + p.debtPayment + p.flexible > p.expenses) {
       setError(
         p.rent > p.expenses
           ? "Rent cannot exceed the total spending that includes it."
@@ -124,19 +152,14 @@ export function SetupWizard({
       return;
     }
     setError("");
-    if (step < steps.length - 1) {
+    if (step < steps.length) {
       setStep(step + 1);
       return;
     }
     const salary = draft.profile.salary;
+    const done = applyQuestion(draft, q);
     onComplete({
-      ...draft,
-      target:
-        draft.objective === "price"
-          ? draft.profile.price
-          : draft.objective === "date"
-            ? draft.profile.months
-            : draft.target,
+      ...done,
       profile: {
         ...draft.profile,
         downMode: "percent",
@@ -164,90 +187,118 @@ export function SetupWizard({
           <Icon name="star" /> Get started
         </span>
         <p className="setup-pitch">
-          Four quick questions. Then North Star shows what it takes to reach
-          your goal.
+          Pick your question, answer four short steps, and get a straight
+          answer.
         </p>
         <ol className="setup-progress" aria-label="Setup progress">
-          {steps.map((x, i) => (
+          {names.map((x, i) => (
             <li
-              key={x.name}
+              key={x}
               aria-current={i === step ? "step" : undefined}
               className={i < step ? "done" : ""}
             >
               <span className="step-dot">
                 {i < step ? <Icon name="check" /> : i + 1}
               </span>
-              {x.name}
+              {x}
             </li>
           ))}
         </ol>
       </div>
       <div className="setup-card">
         <span className="step-count">
-          Step {step + 1} of {steps.length}
+          Step {step + 1} of {names.length}
         </span>
         <h1 id="setup-heading" ref={heading} tabIndex={-1}>
-          {current.title}
+          {current ? current.title : "What do you want to know?"}
         </h1>
-        <p className="setup-intro">{current.intro}</p>
-        <form
-          onSubmit={(ev) => {
-            ev.preventDefault();
-            next(ev.currentTarget);
-          }}
-        >
-          <div className="fields" key={step}>
-            {current.fields.map(([key, label, min, max, note]) => (
-              <div key={key} className="field">
-                <label htmlFor={`setup-${key}`}>{label}</label>
-                <input
-                  id={`setup-${key}`}
-                  aria-describedby={note ? `setup-${key}-note` : undefined}
-                  required
-                  type="number"
-                  min={min}
-                  max={max}
-                  step={key === "months" ? 1 : 0.01}
-                  value={draft.profile[key] as number}
-                  onChange={(ev) => change(key, Number(ev.target.value))}
-                />
-                {note && <small id={`setup-${key}-note`}>{note}</small>}
-              </div>
+        <p className="setup-intro">
+          {current
+            ? current.intro
+            : "Pick the question that matters most to you. You can switch later."}
+        </p>
+        {!current && (
+          <div className="question-cards">
+            {(Object.keys(questions) as Question[]).map((k) => (
+              <button
+                key={k}
+                className={`question-card ${k === q ? "is-current" : ""}`}
+                onClick={() => choose(k)}
+              >
+                <strong>{questions[k].title}</strong>
+                <span>{questions[k].text}</span>
+                <Icon name="arrow" />
+              </button>
             ))}
           </div>
-          {error && (
-            <p role="alert" className="warning">
-              {error}
-            </p>
-          )}
-          <p className="fine">
-            Example numbers are filled in. Replace them with yours. You can
-            fine-tune everything else later on the Assumptions page.
-          </p>
+        )}
+        {!current && onCancel && (
           <div className="setup-actions">
-            {onCancel && (
-              <button type="button" className="ghost" onClick={onCancel}>
-                Cancel setup
-              </button>
-            )}
-            <span className="spacer" />
-            {step > 0 && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setStep(step - 1);
-                  setError("");
-                }}
-              >
-                Back
-              </button>
-            )}
-            <button className="primary" type="submit">
-              {step === steps.length - 1 ? "See my plan" : "Continue"}
+            <button type="button" className="ghost" onClick={onCancel}>
+              Cancel setup
             </button>
           </div>
-        </form>
+        )}
+        {current && (
+          <form
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              next(ev.currentTarget);
+            }}
+          >
+            <div className="fields" key={step}>
+              {current.fields.map(([key, label, min, max, note]) => (
+                <div key={key} className="field">
+                  <label htmlFor={`setup-${key}`}>{label}</label>
+                  <input
+                    id={`setup-${key}`}
+                    aria-describedby={note ? `setup-${key}-note` : undefined}
+                    required
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={key === "months" ? 1 : 0.01}
+                    value={draft.profile[key] as number}
+                    onChange={(ev) => change(key, Number(ev.target.value))}
+                  />
+                  {note && <small id={`setup-${key}-note`}>{note}</small>}
+                </div>
+              ))}
+            </div>
+            {error && (
+              <p role="alert" className="warning">
+                {error}
+              </p>
+            )}
+            <p className="fine">
+              Example numbers are filled in. Replace them with yours. You can
+              fine-tune everything else later in Advanced settings.
+            </p>
+            <div className="setup-actions">
+              {onCancel && (
+                <button type="button" className="ghost" onClick={onCancel}>
+                  Cancel setup
+                </button>
+              )}
+              <span className="spacer" />
+              {step > 0 && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setStep(step - 1);
+                    setError("");
+                  }}
+                >
+                  Back
+                </button>
+              )}
+              <button className="primary" type="submit">
+                {step === steps.length ? "See my answer" : "Continue"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </section>
   );

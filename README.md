@@ -10,12 +10,12 @@ Live site: https://mstolte02.github.io/north-star-optimizer/
 
 ## How it works
 
-1. **Setup** — four quick questions: income, spending, savings and the home you want. Example numbers are filled in; replace them with yours.
-2. **Plan** — pick a goal and see the best plan that fits, what has to change, and a month-by-month projection of cash, equity, mortgage and net worth.
-3. **Priorities** — rank what matters (need less extra income, buy sooner, keep flexible spending, keep more cash, keep housing costs low) and choose which numbers the planner may change.
-4. **Explore** — alternative paths, salary and price thresholds, sensitivity checks and the full arithmetic.
-5. **Assumptions** — every input, grouped into income, spending and debt, home and mortgage, savings and investing, and your limits.
-6. **Scenarios** — save, compare, export, import and share plans. Goal-only share links leave your numbers out.
+1. **Pick a question** — When can I buy a home? How much home can I afford? Can I buy by a certain date? What income do I need?
+2. **Four short steps** — income, spending, savings and the home. Example numbers are filled in; replace them with yours.
+3. **Get a straight answer** — one sentence, such as "You can buy a $300,000 home in Dec 2030", with the monthly cost and the cash left after closing.
+4. **See ways to get there** — two to four options that pass all your limits (earn a bit more, spend less, change the down payment). Choose one to make it your plan.
+5. **Try it yourself** — sliders for salary, flexible spending, price, timing and down payment update the answer instantly.
+6. **Advanced** — every goal, priority ranking and locks, alternative paths and the full math, and every assumption. **Saved** holds scenarios to compare, export and share.
 
 ### Goals
 
@@ -53,7 +53,9 @@ The dev URL includes `/north-star-optimizer/`, matching the GitHub Pages base pa
 - `src/engine.ts` — pure financial calculations and the bounded optimizer
 - `src/optimizer.worker.ts` — runs the optimizer off the main thread
 - `src/persistence.ts` — validation, browser storage, JSON import/export, share links, and migration of version 1 scenarios
-- `src/App.tsx` — pages and controls
+- `src/App.tsx` — routing and the Advanced pages
+- `src/Landing.tsx`, `src/Results.tsx` — first page and the answer page
+- `src/verdict.ts` — the one-sentence answer for each question
 - `src/SetupWizard.tsx` — first-run setup
 - `src/Chart.tsx` — interactive projection chart
 - `src/Icon.tsx` — inline icon set

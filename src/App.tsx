@@ -34,6 +34,9 @@ import {
 } from "./persistence";
 import { SetupWizard } from "./SetupWizard";
 import { Icon, type IconName } from "./Icon";
+import { Landing } from "./Landing";
+import { Results } from "./Results";
+import type { Path } from "./engine";
 
 const leverLabels: Record<Lever, string> = {
   salary: "Salary",
@@ -297,19 +300,26 @@ const wholeMonths = [
   "reductionMonth",
 ];
 type Tab =
+  | "landing"
   | "setup"
+  | "results"
   | "plan"
   | "priorities"
   | "explore"
   | "assumptions"
   | "scenarios"
   | "method";
-const nav: { key: Tab; label: string; icon: IconName }[] = [
-  { key: "plan", label: "Plan", icon: "target" },
+const advanced: { key: Tab; label: string; icon: IconName }[] = [
+  { key: "plan", label: "Goal", icon: "target" },
   { key: "priorities", label: "Priorities", icon: "sliders" },
   { key: "explore", label: "Explore", icon: "compass" },
   { key: "assumptions", label: "Assumptions", icon: "list" },
-  { key: "scenarios", label: "Scenarios", icon: "layers" },
+];
+const isAdvanced = (t: Tab) => advanced.some((a) => a.key === t);
+const nav: { key: Tab; label: string; icon: IconName }[] = [
+  { key: "results", label: "Your answer", icon: "star" },
+  { key: "plan", label: "Advanced", icon: "sliders" },
+  { key: "scenarios", label: "Saved", icon: "layers" },
 ];
 function initial() {
   try {
@@ -346,7 +356,7 @@ function PageHead({
 export default function App() {
   const [init] = useState(initial),
     [s, setS] = useState<Scenario>(init.s),
-    [tab, setTab] = useState<Tab>(init.ready ? "plan" : "setup"),
+    [tab, setTab] = useState<Tab>(init.ready ? "results" : "landing"),
     [setupComplete, setSetupComplete] = useState(init.ready),
     [saved, setSaved] = useState<Scenario[]>([]),
     [message, setMessage] = useState(init.error),
@@ -531,7 +541,14 @@ export default function App() {
     : best
       ? { text: "Within your limits", tone: "good" }
       : { text: "Changes needed", tone: "warn" };
-  const go = (t: Tab) => setTab(t);
+  const go = (t: Tab) => {
+    setTab(t);
+    window.scrollTo?.(0, 0);
+  };
+  const applyPath = (path: Path) => {
+    setS({ ...s, profile: path.e.p, name: path.name });
+    setMessage(`“${path.name}” is now your plan.`);
+  };
   const saveBar = (
     <div className="save-bar">
       <label>
@@ -555,7 +572,7 @@ export default function App() {
           href="#"
           onClick={(ev) => {
             ev.preventDefault();
-            go(setupComplete ? "plan" : "setup");
+            go(setupComplete ? "results" : "landing");
           }}
         >
           <span className="brand-mark" aria-hidden="true">
@@ -563,22 +580,25 @@ export default function App() {
           </span>
           <span className="brand-name">North Star</span>
         </a>
-        {tab !== "setup" && (
+        {tab !== "setup" && tab !== "landing" && (
           <nav aria-label="Main navigation" className="tabs">
-            {nav.map((n) => (
-              <button
-                key={n.key}
-                aria-current={tab === n.key ? "page" : undefined}
-                className={tab === n.key ? "active" : ""}
-                onClick={() => go(n.key)}
-              >
-                <Icon name={n.icon} />
-                <span>{n.label}</span>
-                {n.key === "scenarios" && saved.length > 0 && (
-                  <span className="count">{saved.length}</span>
-                )}
-              </button>
-            ))}
+            {nav.map((n) => {
+              const on = n.key === "plan" ? isAdvanced(tab) : tab === n.key;
+              return (
+                <button
+                  key={n.key}
+                  aria-current={on ? "page" : undefined}
+                  className={on ? "active" : ""}
+                  onClick={() => go(n.key)}
+                >
+                  <Icon name={n.icon} />
+                  <span>{n.label}</span>
+                  {n.key === "scenarios" && saved.length > 0 && (
+                    <span className="count">{saved.length}</span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
         )}
         <span className="topbar-note">
@@ -598,6 +618,40 @@ export default function App() {
             </button>
           </div>
         )}
+        {tab === "landing" && (
+          <Landing
+            onStart={() => go("setup")}
+            onSaved={saved.length ? () => go("scenarios") : undefined}
+          />
+        )}
+        {isAdvanced(tab) && (
+          <nav className="subtabs" aria-label="Advanced settings">
+            {advanced.map((a) => (
+              <button
+                key={a.key}
+                aria-current={tab === a.key ? "page" : undefined}
+                className={tab === a.key ? "active" : ""}
+                onClick={() => go(a.key)}
+              >
+                <Icon name={a.icon} />
+                {a.label}
+              </button>
+            ))}
+          </nav>
+        )}
+        {tab === "results" && (
+          <Results
+            s={s}
+            setS={setS}
+            update={update}
+            result={result}
+            busy={busy}
+            onApply={applyPath}
+            onSave={save}
+            onAdvanced={() => go("plan")}
+            onStartOver={() => go("setup")}
+          />
+        )}
         {tab === "setup" && (
           <>
             {saved.length > 0 && (
@@ -610,11 +664,11 @@ export default function App() {
             )}
             <SetupWizard
               scenario={s}
-              onCancel={setupComplete ? () => go("assumptions") : undefined}
+              onCancel={setupComplete ? () => go("results") : undefined}
               onComplete={(plan) => {
                 setS(plan);
                 setSetupComplete(true);
-                go("plan");
+                go("results");
                 try {
                   localStorage.setItem(STARTING_PLAN, JSON.stringify(plan));
                 } catch {
@@ -632,13 +686,13 @@ export default function App() {
             <section className="goal-panel" aria-labelledby="goal-heading">
               <div className="goal-intro">
                 <span className="kicker">
-                  <Icon name="star" /> Your north star
+                  <Icon name="star" /> Advanced
                 </span>
-                <h1 id="goal-heading">Pick one goal. See what it takes.</h1>
+                <h1 id="goal-heading">Choose from every goal.</h1>
                 <p>
-                  Choose the outcome that matters most. North Star tests
-                  thousands of combinations and shows the changes that get you
-                  there inside your limits.
+                  Your answer page covers the four common questions. Here you
+                  can pick any of thirteen goals and see the full result, then
+                  fine-tune priorities and assumptions.
                 </p>
               </div>
               <div className="goal-control">
@@ -1474,7 +1528,7 @@ export default function App() {
                         onClick={() => {
                           setS(item);
                           setSetupComplete(true);
-                          go("plan");
+                          go("results");
                         }}
                       >
                         Open
