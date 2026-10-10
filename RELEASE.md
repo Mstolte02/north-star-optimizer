@@ -19,9 +19,13 @@
 
 Repository: https://github.com/Mstolte02/north-star-optimizer
 
-The source is published to main. GitHub Actions run 38010625474 passed lint, all 38 tests, TypeScript and the production build. It stopped at configure-pages because Pages is not enabled. Select Settings → Pages → Build and deployment → Source → GitHub Actions, then rerun the workflow. Public deployment and real desktop/iPhone rendering remain unverified.
+The source is published to main. GitHub Actions run 38010765989 (attempt 2) passed lint, all 38 tests, TypeScript, the production build and GitHub Pages deployment.
 
-Expected Pages URL: https://mstolte02.github.io/north-star-optimizer/
+Live site: https://mstolte02.github.io/north-star-optimizer/
+
+Live browser checks confirmed the default optimizer result, goal changes, priority reordering, salary locks and scenario persistence across reload. Desktop viewport 1363px had no horizontal overflow (document width 1348px). A deployment screenshot is saved in docs/north-star-live.jpg. No application-origin console errors were observed; browser extension metadata errors were unrelated to the app. Actual iPhone rendering and browser reduced-motion rendering remain unverified.
+
+Dependency audit after updating Vitest to 5.0.3: zero reported vulnerabilities.
 
 ## Material planning limitations
 
