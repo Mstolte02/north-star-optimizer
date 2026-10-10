@@ -1,4 +1,4 @@
-# Release verification — 2026-10-09
+# Release verification — 2026-10-10
 
 ## Completed
 
@@ -19,7 +19,7 @@
 
 Repository: https://github.com/Mstolte02/north-star-optimizer
 
-The source is being published to main with automatic GitHub Actions validation and Pages deployment. Deployment status and real browser rendering must be verified independently of the local checks above.
+The source is published to main. GitHub Actions run 38010625474 passed lint, all 38 tests, TypeScript and the production build. It stopped at configure-pages because Pages is not enabled. Select Settings → Pages → Build and deployment → Source → GitHub Actions, then rerun the workflow. Public deployment and real desktop/iPhone rendering remain unverified.
 
 Expected Pages URL: https://mstolte02.github.io/north-star-optimizer/
 
