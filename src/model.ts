@@ -30,27 +30,19 @@ export interface Profile {
   growth: number;
   raiseSalary: number;
   raiseMonth: number;
-  filing: string;
   retirement: number;
   benefits: number;
-  stateTax: number;
-  localTax: number;
   expenses: number;
   rent: number;
-  dining: number;
-  diningTarget: number;
-  medication: number;
-  ownLoan: number;
-  ownBalance: number;
-  partnerLoan: number;
-  partnerBalance: number;
-  loanMonth: number;
-  plus: number;
-  plusBalance: number;
-  includesPlus: boolean;
-  includesFutureLoan: boolean;
-  inflation: number;
+  flexible: number;
+  flexibleTarget: number;
   reductionMonth: number;
+  debtPayment: number;
+  debtBalance: number;
+  futureDebtPayment: number;
+  futureDebtBalance: number;
+  futureDebtMonth: number;
+  inflation: number;
   savings: number;
   savingsRate: number;
   preContribution: number;
@@ -82,7 +74,7 @@ export interface Profile {
   horizon: number;
 }
 export interface Scenario {
-  version: 1;
+  version: 2;
   id: string;
   name: string;
   objective: Objective;
@@ -105,164 +97,156 @@ export const objectives: Record<
   }
 > = {
   price: {
-    label: "Home purchase price",
+    label: "Buy a home at a set price",
     unit: "$",
-    description: "Find the changes needed to purchase the home you want.",
-    target: 400000,
+    description: "Find the changes you need to buy a home at this price.",
+    target: 300000,
     mode: "target",
   },
   payment: {
-    label: "Monthly housing payment",
+    label: "Keep housing under a monthly cost",
     unit: "$",
-    description: "Maximize home price within your total housing cost ceiling.",
-    target: 2800,
+    description:
+      "Find the most home you can buy while total housing stays under this amount.",
+    target: 2400,
     mode: "maximize",
   },
   date: {
-    label: "Home purchase date",
+    label: "Buy a home by a date",
     unit: "months",
-    description: "Make closing possible by your selected deadline.",
-    target: 20,
+    description: "Make the purchase possible by this deadline.",
+    target: 18,
     mode: "target",
   },
   before: {
-    label: "Savings before purchasing",
+    label: "Save a set amount each month now",
     unit: "$",
-    description: "Maintain this monthly saving contribution before closing.",
-    target: 1000,
+    description: "Keep this monthly saving amount before you buy.",
+    target: 800,
     mode: "target",
   },
   after: {
-    label: "Savings after purchasing",
+    label: "Keep saving after I buy",
     unit: "$",
     description:
-      "Maximize home price while preserving monthly savings after closing.",
-    target: 1000,
+      "Find the most home you can buy and still save this much each month.",
+    target: 500,
     mode: "maximize",
   },
   income: {
-    label: "Household take-home income",
+    label: "Reach a take-home income",
     unit: "$",
-    description:
-      "Solve for gross salary using your editable incremental take-home assumptions.",
-    target: 9000,
+    description: "Solve for the salary that gives this monthly take-home pay.",
+    target: 5500,
     mode: "target",
   },
   salary: {
-    label: "Required annual salary",
+    label: "Find the salary I need",
     unit: "$",
-    description:
-      "Find the minimum primary salary that makes the home plan feasible.",
+    description: "Find the lowest salary that makes the home plan work.",
     target: 85000,
     mode: "minimize",
   },
   down: {
-    label: "Down payment",
+    label: "Make a set down payment",
     unit: "%",
-    description: "Build the cash required for your selected down payment.",
+    description: "Save enough for this down payment.",
     target: 20,
     mode: "target",
   },
   remaining: {
-    label: "Savings after closing",
+    label: "Keep cash after closing",
     unit: "$",
-    description: "Protect a minimum cash balance after paying closing costs.",
-    target: 20000,
+    description: "Keep at least this much cash after you pay closing costs.",
+    target: 15000,
     mode: "target",
   },
   emergency: {
-    label: "Minimum emergency fund",
+    label: "Keep an emergency fund",
     unit: "months",
-    description: "Preserve this many months of post-purchase living expenses.",
+    description: "Keep this many months of living costs after you buy.",
     target: 3,
     mode: "target",
   },
   wealth: {
-    label: "Long-term net worth",
+    label: "Reach a net worth",
     unit: "$",
     description:
-      "Reach a modeled asset-minus-legal-debt target at your planning horizon.",
-    target: 300000,
+      "Reach this net worth (assets minus debts) by your planning horizon.",
+    target: 250000,
     mode: "target",
   },
   breakEven: {
-    label: "Time to financial break-even",
+    label: "Beat renting within a time",
     unit: "months",
     description:
-      "Recover closing and moving costs versus continuing to rent by this horizon.",
+      "Recover closing and moving costs, compared with renting, within this time.",
     target: 120,
     mode: "target",
   },
   rate: {
-    label: "Maximum mortgage interest rate",
+    label: "Find the highest rate I can handle",
     unit: "%",
     description:
-      "Find the highest planning rate consistent with cash, housing and saving constraints.",
+      "Find the highest mortgage rate that still fits your cash and saving limits.",
     target: 6.5,
     mode: "maximize",
   },
 };
 export const priorityLabels: Record<Priority, string> = {
   payment: "Keep housing costs low",
-  reserve: "Preserve more cash at closing",
-  spending: "Preserve lifestyle spending",
-  months: "Purchase sooner",
-  salary: "Minimize salary increases",
+  reserve: "Keep more cash at closing",
+  spending: "Keep my flexible spending",
+  months: "Buy sooner",
+  salary: "Need less extra income",
 };
+// Example numbers for a typical renter saving for a first home. Every value is editable.
 export function defaults(): Scenario {
   return {
-    version: 1,
+    version: 2,
     id: "default",
-    name: "Our first home",
+    name: "My first home",
     objective: "price",
-    target: 400000,
+    target: 300000,
     mode: "target",
     preferred: false,
     profile: {
-      start: "2026-10",
-      salary: 70000,
-      partnerSalary: 45000,
-      net: 7399,
-      retention: 75,
+      start: new Date().toISOString().slice(0, 7),
+      salary: 72000,
+      partnerSalary: 0,
+      net: 4700,
+      retention: 72,
       bonus: 0,
       growth: 0,
-      raiseSalary: 70000,
+      raiseSalary: 72000,
       raiseMonth: 0,
-      filing: "Married filing jointly",
       retirement: 0,
       benefits: 0,
-      stateTax: 3,
-      localTax: 1.7,
-      expenses: 6726,
-      rent: 1826,
-      dining: 635,
-      diningTarget: 635,
-      medication: 500,
-      ownLoan: 298.67,
-      ownBalance: 26291,
-      partnerLoan: 250,
-      partnerBalance: 29171,
-      loanMonth: 24,
-      plus: 745.88,
-      plusBalance: 96916.46,
-      includesPlus: true,
-      includesFutureLoan: false,
-      inflation: 0,
+      expenses: 3500,
+      rent: 1500,
+      flexible: 450,
+      flexibleTarget: 450,
       reductionMonth: 0,
-      savings: 5700,
+      debtPayment: 300,
+      debtBalance: 15000,
+      futureDebtPayment: 0,
+      futureDebtBalance: 0,
+      futureDebtMonth: 0,
+      inflation: 0,
+      savings: 20000,
       savingsRate: 3,
       preContribution: 0,
       postContribution: 0,
       investment: 0,
       investmentReturn: 0,
-      price: 400000,
+      price: 300000,
       down: 10,
-      downDollars: 40000,
+      downDollars: 30000,
       downMode: "percent",
       rate: 6.5,
       term: 30,
-      tax: 1,
-      insurance: 150,
+      tax: 1.1,
+      insurance: 125,
       pmi: 0.5,
       hoa: 0,
       maintenance: 1,
@@ -270,24 +254,24 @@ export function defaults(): Scenario {
       closing: 3,
       moving: 2000,
       appreciation: 0,
-      months: 32,
-      reserve: 20000,
+      months: 24,
+      reserve: 10000,
       emergencyMonths: 0,
-      after: 750,
-      paymentLimit: 2800,
+      after: 300,
+      paymentLimit: 2600,
       dtiLimit: 43,
-      wealthTarget: 300000,
+      wealthTarget: 250000,
       horizon: 120,
     },
     ranges: {
-      salary: { locked: false, min: 70000, max: 160000 },
-      spending: { locked: false, min: 300, max: 635 },
+      salary: { locked: false, min: 72000, max: 150000 },
+      spending: { locked: false, min: 150, max: 450 },
       down: { locked: false, min: 3, max: 40 },
       months: { locked: false, min: 1, max: 120 },
-      price: { locked: true, min: 150000, max: 650000 },
+      price: { locked: true, min: 150000, max: 600000 },
       rate: { locked: true, min: 0, max: 12 },
     },
-    priorities: ["payment", "reserve", "spending", "months", "salary"],
+    priorities: ["salary", "months", "spending", "reserve", "payment"],
     tolerances: {
       payment: 100,
       reserve: 5000,

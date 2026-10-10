@@ -1,10 +1,35 @@
 # North Star
 
-**Your goals. Your priorities. Your path.**
+**Pick one goal. See what it takes.**
 
-A standalone, static financial planning studio built with React, TypeScript and Vite. It has no relationship to the Penny Pilot source repository, no bank connections, database, authentication or analytics. All calculations run in the browser; optimization runs in a Web Worker.
+North Star is a free, private home-buying planner. Choose the outcome that matters most — a home price, a purchase date, a monthly housing cost, a savings cushion — rank your priorities, and North Star searches thousands of combinations to show the changes that get you there inside your limits.
 
-## Run
+Everything runs in your browser. There are no accounts, bank connections, servers or analytics.
+
+Live site: https://mstolte02.github.io/north-star-optimizer/
+
+## How it works
+
+1. **Setup** — four quick questions: income, spending, savings and the home you want. Example numbers are filled in; replace them with yours.
+2. **Plan** — pick a goal and see the best plan that fits, what has to change, and a month-by-month projection of cash, equity, mortgage and net worth.
+3. **Priorities** — rank what matters (need less extra income, buy sooner, keep flexible spending, keep more cash, keep housing costs low) and choose which numbers the planner may change.
+4. **Explore** — alternative paths, salary and price thresholds, sensitivity checks and the full arithmetic.
+5. **Assumptions** — every input, grouped into income, spending and debt, home and mortgage, savings and investing, and your limits.
+6. **Scenarios** — save, compare, export, import and share plans. Goal-only share links leave your numbers out.
+
+### Goals
+
+Buy at a set price · keep housing under a monthly cost · buy by a date · save a set amount now · keep saving after buying · reach a take-home income · find the salary you need · make a set down payment · keep cash after closing · keep an emergency fund · reach a net worth · beat renting within a time · find the highest rate you can handle.
+
+### The money model
+
+You enter one total for monthly spending. Rent, flexible spending (dining, shopping, fun) and debt payments are parts of that total, so nothing is counted twice. A future debt payment — for example a student loan leaving deferment — can start on a later month. After you buy, rent drops out and the full cost of owning replaces it: mortgage, property tax, insurance, PMI, HOA, upkeep and extra utilities.
+
+Income changes use a simple "share of a raise you keep after tax" estimate. It is not a tax calculation. Interest rates, raises, returns, home value growth and inflation are your inputs; the planner never changes them unless you make them flexible.
+
+North Star is a planning tool, not financial advice.
+
+## Run locally
 
 Requires Node 22+.
 
@@ -16,58 +41,26 @@ npm run lint
 npm run build
 ```
 
-Development URL includes `/north-star-optimizer/`. Production files are in `dist/`. Vite's base path is `/north-star-optimizer/` for project-level GitHub Pages. Navigation stays on a single static document; scenario links use the URL fragment.
+The dev URL includes `/north-star-optimizer/`, matching the GitHub Pages base path. Production files are in `dist/`.
 
-## GitHub Pages
+## Deploy
 
-The included `.github/workflows/pages.yml` validates lint, tests and TypeScript before deployment. Pushes to `main` publish automatically; pull requests run validation only.
-
-1. Create a public repository named `Mstolte02/north-star-optimizer`.
-2. Push this checkout to its `main` branch.
-3. In repository **Settings → Pages**, select **GitHub Actions** as the source.
-4. Run the workflow, or push a new commit.
-5. Confirm the successful `github-pages` deployment and visit `https://mstolte02.github.io/north-star-optimizer/`.
-
-This URL is the expected URL, not evidence that a deployment has occurred. See RELEASE.md for the actual verification state.
-
-## Planning experience
-
-First visits begin with a four-step setup wizard (income, spending, savings cushion, home goal). Starting plans are validated and remembered in browser-local storage; saved scenarios use their existing storage and remain available. Shared scenario links open directly into the planner. Setup can be revisited from Assumptions without changing the plan until completion.
-
-The workspace is split into **Plan** (goal, results, projection), **Priorities** (ranking, locks and ranges), **Explore** (paths, thresholds, arithmetic and sensitivities), **Assumptions** (editable financial details), and **Scenarios** (saving, comparison and transfer). Calculation methodology is available in the footer.
-
-- Thirteen selectable goals, including house price, monthly savings, purchase deadline, required salary, reserves, net worth and tolerable interest rate.
-- Hard housing, reserve, savings and DTI requirements; explicit locks and ranges for six supported optimization levers.
-- Five ranked preferences with editable tolerances, desktop dragging and touch/keyboard-friendly reorder buttons.
-- Feasible alternative paths, loan amortization, closing cash, salary thresholds, sensitivity analysis and interactive trajectories.
-- Saved/named/duplicated/preferred scenarios, side-by-side comparison, versioned JSON imports/exports, goal-only links and explicit opt-in full-scenario links.
-- Ivory, navy, teal, sage and copper design; editorial serif and sans-serif pairing, responsive layout, reduced-motion support.
-
-## Summary profile and privacy
-
-Defaults use the explicitly authorized summary figures: $70,000/$45,000 salary, $7,399 household monthly take-home, $6,726 spending, $5,700 savings and a $400,000 home goal. The $85,000/$47,000 alternative is available with one button. These summary defaults will be visible in public source and to site visitors. No accounts, transaction exports, credentials, addresses or private institution information are included.
-
-The spending baseline includes the $298.67 primary federal payment, $500 medication component and, as a visible initial assumption, the $745.88 Parent PLUS contribution. The $250 future partner federal payment is separate, starting at month 24. Inclusion toggles prevent double counting. Editing included spending components changes the total baseline by the delta. Completed treatment has no future cash obligation. Parent PLUS is cash flow only, excluded from household legal-debt balances and modeled DTI; other-parent loans are excluded.
-
-An unchanged profile reproduces **$673/month**, dropping to **$423/month** when the future $250 payment activates. The 6.5% rate, 1% annual property tax, $150 insurance, 0.5% PMI, $1,826 rent, 3% cash interest, $2,000 moving cost, June 2029 timing, $20,000 reserve and $750 monthly savings floor are configurable planning assumptions, not verified quotes or forecasts.
-
-## Mathematics and limitations
-
-See [CALCULATIONS.md](CALCULATIONS.md) for formulas, independently verified cases and solver limitations. Income is calibrated to supplied take-home and uses an editable marginal retention ratio. Filing status is descriptive; there is no tax-table engine. Additional retirement and benefit inputs are deductions beyond the supplied net baseline. State/local tax edits adjust net relative to previous assumptions.
-
-The optimizer searches explicitly permitted ranges using a finite deterministic grid and salary bisection, then ranks feasible candidates lexicographically. It never silently adjusts growth, taxes, inflation, returns or appreciation. A missing path is not a proof that no feasible point exists between samples. Salary-only thresholds can exceed permitted optimization bounds and are labeled separately.
-
-Net worth includes home equity, cash and modeled investments, less household federal balances. Initial federal-loan principal paydown assumes zero interest and no forgiveness; modeled federal payments stop as that zero-interest principal is repaid. Parent PLUS balance is contextual and does not become household legal debt. Ownership break-even includes rent-versus-owner costs and forgone cash interest, but excludes selling costs and tax benefits. It is measured after closing.
+`.github/workflows/pages.yml` runs lint, tests and the TypeScript build on every push and pull request. Pushes to `main` publish to GitHub Pages. In **Settings → Pages**, the source must be **GitHub Actions**.
 
 ## Architecture
 
-- `src/model.ts`: versioned profile, goal and constraint definitions
-- `src/engine.ts`: pure financial calculations and optimization
-- `src/optimizer.worker.ts`: browser worker isolation
-- `src/persistence.ts`: validation, storage, imports and links
-- `src/App.tsx`: objectives, priorities, assumptions and scenarios
-- `src/Chart.tsx`: interactive financial trajectory
-- `src/engine.test.ts`: mathematical and persistence regressions
-- `src/ui.test.tsx`: accessible controls, scenarios and automated axe checks
+- `src/model.ts` — scenario schema (version 2), goals, priorities and example defaults
+- `src/engine.ts` — pure financial calculations and the bounded optimizer
+- `src/optimizer.worker.ts` — runs the optimizer off the main thread
+- `src/persistence.ts` — validation, browser storage, JSON import/export, share links, and migration of version 1 scenarios
+- `src/App.tsx` — pages and controls
+- `src/SetupWizard.tsx` — first-run setup
+- `src/Chart.tsx` — interactive projection chart
+- `src/Icon.tsx` — inline icon set
+- `src/engine.test.ts`, `src/ui.test.tsx` — math, persistence, interaction and axe accessibility tests
 
-Browser storage does not sync across devices. JSON exports include financial assumptions; keep them private. Goal-only links omit the household profile; full links are readable by anyone with the link. Fonts load from Google Fonts with local fallbacks; financial values never enter those font requests.
+See [CALCULATIONS.md](CALCULATIONS.md) for formulas and limits.
+
+## Privacy
+
+Saved scenarios live only in this browser and do not sync between devices. JSON exports contain your numbers; keep them private. Full-scenario share links can be read by anyone who has the link. Fonts load from Google Fonts with system fallbacks; no financial values are sent anywhere.

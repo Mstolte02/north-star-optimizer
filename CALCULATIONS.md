@@ -2,61 +2,69 @@
 
 ## Mortgage
 
-For principal L, monthly interest r = annualRate / 1200 and n = termYears × 12:
+For loan L, monthly rate r = annualRate / 1200 and n = termYears × 12:
 
 `payment = L × r / (1 − (1 + r)^−n)`
 
-At zero interest, `payment = L / n`. Scheduled balance is computed analytically and verified independently against month-by-month amortization. At the final payment, P&I is zero.
+At zero interest, `payment = L / n`. The scheduled balance is computed in closed form and checked against month-by-month amortization. After the final payment, principal and interest are zero.
 
-- $360,000 principal, 6.5%, 30 years → **$2,275.444884574669** monthly P&I.
-- $120,000 principal, 0%, 10 years → **$1,000** monthly; $84,000 after 36 payments.
-- $400,000 home, 10% down, 3% closing, $2,000 moving → **$54,000** cash withdrawn at closing.
-- Initial PMI: 0.5% × $360,000 / 12 → **$150/month**. At 20% down there is no PMI. Existing PMI is modeled to terminate when scheduled LTV reaches 78% of original value. This assumes a conventional loan in good standing; lender rules and mortgage products differ.
+- $360,000 loan, 6.5%, 30 years → **$2,275.444884574669** monthly P&I.
+- $120,000 loan, 0%, 10 years → **$1,000** monthly; $84,000 after 36 payments.
+- Example defaults: $300,000 home, 10% down, 3% closing, $2,000 moving → **$41,000** cash at closing.
+- Initial PMI: 0.5% × $270,000 / 12 → **$112.50/month**. At 20% down there is no PMI. PMI ends when the scheduled balance reaches 78% of the original price, as on a conventional loan in good standing. Lender rules differ.
 
 Reference: [Consumer Financial Protection Bureau — PMI termination](https://www.consumerfinance.gov/ask-cfpb/when-can-i-remove-private-mortgage-insurance-pmi-from-my-loan-en-202/).
 
-The numerical P&I check was independently reproduced with Python Decimal at 45-digit precision using the standard annuity equation. Balance tests use an independent iterative recurrence rather than duplicating the closed-form function.
+The P&I value was reproduced independently with 45-digit Decimal arithmetic. Balance tests use an iterative recurrence, not the closed-form function.
 
 ## Cash flow and reserves
 
-Before purchase: `net income − household expenses − investments`.
+Before purchase: `take-home − spending − investing`.
 
-After purchase: subtract total ownership cost and remove the included rent. Ownership includes P&I, tax, insurance, PMI, maintenance, HOA and incremental utilities.
+After purchase: subtract the full cost of owning and remove rent. Owning includes P&I, property tax, insurance, PMI, HOA, upkeep and extra utilities.
 
-Included components are not added again. A separate future loan is added only from its effective month. If the baseline already includes that future payment, it is removed before its effective month. Dining adjustments use the difference from the included original amount. The baseline must be at least the sum of its included components; inconsistent totals are reported as infeasible.
+Spending is one total. Rent, flexible spending and current debt payments are parts of it and are never added again. Changing a part changes the total by the same amount. If the total is smaller than its parts, the plan is flagged as infeasible.
 
-Emergency cash = maximum of the configured dollar reserve and emergency months × modeled monthly living expenses. Fixed federal and Parent PLUS payments are not inflated with lifestyle expenses. Investing and unallocated saving surplus are excluded from emergency living expenses. Negative cash flow reduces cash; it is not clamped into a fictitious zero deficit.
+- **Flexible spending** can move to a planned amount from a chosen month. The planner may lower it inside the range you allow.
+- **Current debt** is paid down at its monthly payment with zero interest. The payment stops when the balance reaches zero.
+- **New debt** (for example a loan leaving deferment) is added from its start month and paid down the same way.
 
-Income changes use `annual salary change × incremental retention / 1200`. Scheduled raises start at the configured month; growth is explicit. This is a planning conversion, not a tax calculation.
+Inflation applies to lifestyle spending and rent, not to fixed debt payments. Emergency cash = the larger of the dollar reserve and emergency months × monthly living costs after purchase. Negative cash flow reduces savings; it is never clamped to zero.
 
-Cash follows `cash[m+1] = cash[m] × (1 + annual cash rate / 1200) + contribution[m]`, followed by the closing withdrawal at the purchase point. Positive contribution caps exclude any unallocated surplus from projected assets. If a cap exceeds available cash flow, the plan is flagged instead of reporting that cap as feasible savings.
+Income changes use `annual salary change × share kept / 1200`. Scheduled raises start on their month; growth is explicit. This is a planning estimate, not a tax calculation.
+
+Cash follows `cash[m+1] = cash[m] × (1 + cash rate / 1200) + contribution[m]`, then the closing withdrawal at purchase. A positive saving limit caps contributions; surplus above it is treated as spent. A limit larger than available cash flow is flagged.
 
 ## Thresholds
 
-Salary-only thresholds use bisection to dollar precision at the entered purchase month, home price and down payment. Break-even sets cash reserve, emergency-month reserve and post-purchase savings floor to zero, while retaining the selected goal and other limits. Comfortable retains user-configured cushions. If a payment cap or another non-income constraint cannot be solved by salary, the threshold is null.
+Salary thresholds use bisection to the dollar at the entered purchase month, price and down payment. "Lowest salary that works" sets the cash reserve, emergency months and post-purchase saving floor to zero but keeps every other limit. "Comfortable salary" keeps them. If salary alone cannot satisfy a limit (for example a housing cap), the result is "Salary alone can't fix it".
 
-For constant monthly saving C and rate r over n months:
+For constant monthly saving C at rate r over n months:
 
 `futureCash = startingCash × (1 + r)^n + C × ((1 + r)^n − 1) / r`.
 
-At zero interest, the required monthly contribution for default closing and reserves is `(54,000 + 20,000 − 5,700) / 32 = $2,134.375`.
+At zero interest with the example defaults, the required monthly saving is `(41,000 + 10,000 − 20,000) / 24 = $1,291.67`.
 
-Maximum home price at the entered income/date uses bisection, including closing cash and total housing costs. Because PMI has a discontinuity at 20% down, comparisons use the selected down-payment method rather than varying it inside this inverse solve.
+"Most home you can afford" uses bisection on price at the entered income and date, including closing cash and full housing costs.
 
 ## Search and priorities
 
-Every candidate is checked against hard limits and the selected objective. Locked levers remain unchanged. Grid resolution is 13 prices, 10 down percentages, 5 dining levels, 9 purchase months, and 17 rates when rate is selected, with current values and the explicit deadline also included. Salary bisection searches only the permitted range. Fixed-dollar down payments require the percentage lever to be locked.
+Every candidate is checked against your limits and goal. Locked numbers never change. The grid covers 13 prices, 10 down payments, 5 flexible-spending levels, 9 purchase months, and 17 rates when rate is the goal, plus the entered values and any deadline. Salary is solved by bisection inside its allowed range. A fixed-dollar down payment requires the down payment lever to be locked.
 
-Primary objective values are scored first (maximum feasible sampled price for housing-payment and post-purchase-saving goals, minimum primary salary, or maximum sampled rate). Other goals are target constraints. Preferences are scored in priority order, using floor(value/tolerance) bands, followed by unrounded preference tie breakers. Reserve preference rewards at most one additional configured reserve tolerance beyond the required reserve to avoid indefinitely rewarding delay.
+The goal's own value is ranked first (largest sampled price for housing-cost and keep-saving goals, lowest salary, or highest rate). Then priorities are compared in order, in steps the size of each tolerance, followed by exact tie-breaks. The default order is: need less extra income, buy sooner, keep flexible spending, keep more cash, keep housing costs low.
 
-The first reported path is therefore best among tested candidates under this ranking. No global optimality claim is made. Alternative searches hold distinct levers fixed and only report distinct feasible results. The engine never fabricates a path when none passes.
+The top path is the best of the tested candidates under this ranking. It is not a proof of a global best. Alternative paths hold different numbers fixed and only appear if they pass every limit and differ from earlier paths.
 
-## Net worth and ownership break-even
+## Net worth and break-even
 
-Net worth is modeled cash + investments + home equity − remaining federal household loan principal. Federal loans use zero-interest paydown in this version, with modeled payments stopping when principal is repaid. Parent PLUS remains cash flow, excluded from legal net worth and DTI. PMI is removed on the amortization schedule. No loan forgiveness, future asset liquidation costs or tax benefits are modeled.
+Net worth = cash + investments + home equity − unpaid debt. No selling costs, tax benefits or loan forgiveness are modeled.
 
-Ownership break-even is measured from closing: owner cash starts at negative down payment, closing and moving costs. It earns (or incurs the opportunity cost of) the cash interest assumption. Rent minus owner housing costs is added monthly, and home equity is added for the comparison. Break-even is the first month owner incremental wealth is nonnegative, up to 360 months. This is financial cost recovery versus renting, not necessarily a recommended sale date.
+Break-even is measured from closing. Owner cash starts at minus the down payment, closing and moving costs, earns the cash interest rate, and gains rent minus owner costs each month. Home equity is added. Break-even is the first month this is zero or more, up to 360 months. It is cost recovery compared with renting, not a recommended sale date.
+
+## Version 1 scenarios
+
+Earlier saves used named household loans. On import they are migrated: the current loan and any family-loan contribution become current debt, the future partner loan becomes new debt, and dining becomes flexible spending. The total spending figure is preserved.
 
 ## Verification scope
 
-Automated checks cover mathematics, inverse thresholds, default cash flow, inclusion toggles, negative cash flow, caps, loan distinctions, locked conflicts, priority ordering, deadline behavior, safe imports, browser-style storage, privacy links, accessible interaction and axe DOM checks. Palette text contrast is calculated separately against the page background; jsdom cannot verify rendered contrast or responsive geometry. Real desktop/iPhone rendering and deployed-site checks remain pending until browser publishing access is available.
+Automated tests cover the mortgage math, inverse thresholds, cash flow, debt scheduling, contribution caps, locked conflicts, priority ordering, deadlines, imports and migration, storage, share-link privacy, accessible interaction and axe DOM checks. jsdom cannot check rendered contrast or layout; those were checked in a browser at desktop and 375 px widths in light and dark mode.

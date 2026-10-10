@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   defaults,
   dateAt,
@@ -30,15 +30,26 @@ import {
   importScenarios,
   loadScenarios,
   saveScenarios,
+  STARTING_PLAN,
 } from "./persistence";
 import { SetupWizard } from "./SetupWizard";
+import { Icon, type IconName } from "./Icon";
+
 const leverLabels: Record<Lever, string> = {
-  salary: "Primary annual salary",
-  spending: "Dining & snack spending",
+  salary: "Salary",
+  spending: "Flexible spending",
   down: "Down payment %",
-  months: "Months until purchase",
+  months: "Months until you buy",
   price: "Home price",
-  rate: "Mortgage interest rate %",
+  rate: "Mortgage rate %",
+};
+const leverHints: Record<Lever, string> = {
+  salary: "How much your yearly pay could rise.",
+  spending: "How far you could cut dining, shopping and fun.",
+  down: "The share of the price you pay up front.",
+  months: "How long you are willing to wait.",
+  price: "Let the planner pick a different home price.",
+  rate: "Test a range of mortgage rates.",
 };
 type Field = {
   key: keyof Profile;
@@ -48,244 +59,262 @@ type Field = {
   step?: number;
   max?: number;
 };
-const groups: { title: string; intro: string; fields: Field[] }[] = [
+const groups: {
+  title: string;
+  icon: IconName;
+  intro: string;
+  fields: Field[];
+}[] = [
   {
-    title: "Income & take-home",
+    title: "Income",
+    icon: "wallet",
     intro:
-      "The $7,399 baseline is user supplied. Raises use your marginal take-home percentage, not a tax-table prediction. State and local changes adjust take-home relative to current assumptions. Filing status is descriptive; it does not simulate a tax return.",
+      "Take-home pay is what reaches your bank account each month. When salary changes, the planner keeps the share of the raise you set below. This is an estimate, not a tax calculation.",
     fields: [
-      { key: "salary", label: "Primary annual salary", unit: "$" },
-      { key: "partnerSalary", label: "Partner annual salary", unit: "$" },
-      { key: "net", label: "Baseline monthly take-home", unit: "$" },
+      { key: "salary", label: "Your annual salary (before tax)", unit: "$" },
+      {
+        key: "partnerSalary",
+        label: "Second income, annual (optional)",
+        unit: "$",
+      },
+      { key: "net", label: "Household take-home pay / month", unit: "$" },
       {
         key: "retention",
-        label: "Incremental gross pay retained",
+        label: "Share of a raise you keep after tax",
         unit: "%",
         max: 100,
       },
-      { key: "bonus", label: "Annual net bonuses & stipends", unit: "$" },
-      {
-        key: "growth",
-        label: "Assumed annual salary growth",
-        unit: "%",
-        max: 30,
-      },
-      { key: "raiseSalary", label: "Scheduled primary salary", unit: "$" },
+      { key: "bonus", label: "Yearly bonus after tax", unit: "$" },
+      { key: "growth", label: "Yearly salary growth", unit: "%", max: 30 },
+      { key: "raiseSalary", label: "Salary after a planned raise", unit: "$" },
       {
         key: "raiseMonth",
         label: "Raise starts in month (0 = none)",
-        unit: "months",
+        unit: "mo",
         max: 360,
       },
       {
         key: "retirement",
-        label: "Additional retirement contribution",
+        label: "Extra retirement saving",
         unit: "%",
         max: 60,
+        note: "Percent of gross pay, beyond what is already taken out.",
       },
-      {
-        key: "benefits",
-        label: "Additional monthly benefit deductions",
-        unit: "$",
-      },
-      {
-        key: "stateTax",
-        label: "State tax planning assumption",
-        unit: "%",
-        max: 30,
-      },
-      {
-        key: "localTax",
-        label: "Local tax planning assumption",
-        unit: "%",
-        max: 30,
-      },
+      { key: "benefits", label: "Extra payroll deductions / month", unit: "$" },
     ],
   },
   {
-    title: "Spending & household loans",
+    title: "Spending & debt",
+    icon: "receipt",
     intro:
-      "Components below are included in the $6,726 baseline as noted. Editing an included component changes that baseline by the difference. Future loan payments are activated by month. Parent PLUS is household cash flow, excluded from modeled legal debt and DTI.",
+      "Enter one total for everything you spend each month. Rent, flexible spending and debt payments are parts of that total, so the planner never counts them twice.",
     fields: [
-      { key: "expenses", label: "Current total spending baseline", unit: "$" },
+      { key: "expenses", label: "Total monthly spending", unit: "$" },
       {
         key: "rent",
-        label: "Rent included in baseline",
+        label: "Rent (part of total)",
         unit: "$",
-        note: "Replaced with housing costs after purchase. $1,826 is an editable planning assumption.",
+        note: "Replaced by your home costs after you buy.",
       },
-      { key: "dining", label: "Current dining & snacks (included)", unit: "$" },
-      { key: "diningTarget", label: "Planned dining & snacks", unit: "$" },
+      {
+        key: "flexible",
+        label: "Flexible spending (part of total)",
+        unit: "$",
+        note: "Dining out, shopping, fun — the part you could cut.",
+      },
+      {
+        key: "flexibleTarget",
+        label: "Planned flexible spending",
+        unit: "$",
+      },
       {
         key: "reductionMonth",
-        label: "Dining change starts in month",
-        unit: "months",
+        label: "Spending change starts in month",
+        unit: "mo",
         max: 360,
       },
-      { key: "medication", label: "Medication (included)", unit: "$" },
       {
-        key: "ownLoan",
-        label: "Primary federal payment (included)",
+        key: "debtPayment",
+        label: "Debt payments (part of total)",
         unit: "$",
+        note: "Car, student and card payments. They stop when the balance is paid.",
       },
-      { key: "ownBalance", label: "Primary federal balance", unit: "$" },
-      { key: "partnerBalance", label: "Partner federal balance", unit: "$" },
+      { key: "debtBalance", label: "Total debt balance", unit: "$" },
       {
-        key: "partnerLoan",
-        label: "Partner future federal payment",
+        key: "futureDebtPayment",
+        label: "New debt payment / month",
         unit: "$",
+        note: "A payment that starts later, such as a loan leaving deferment.",
       },
+      { key: "futureDebtBalance", label: "New debt balance", unit: "$" },
       {
-        key: "loanMonth",
-        label: "Future payment begins in month",
-        unit: "months",
+        key: "futureDebtMonth",
+        label: "New payment starts in month",
+        unit: "mo",
         max: 360,
-      },
-      { key: "plus", label: "Parent PLUS contribution", unit: "$" },
-      {
-        key: "plusBalance",
-        label: "Parent PLUS balance (context only)",
-        unit: "$",
       },
       {
         key: "inflation",
-        label: "Annual spending / rent inflation",
+        label: "Yearly spending and rent growth",
         unit: "%",
         max: 30,
       },
     ],
   },
   {
-    title: "Home & mortgage assumptions",
+    title: "Home & mortgage",
+    icon: "home",
     intro:
-      "6.5% interest, 1% property tax, $150 insurance and 0.5% PMI are editable planning assumptions, not lender quotes or local assessments. Total housing includes maintenance, HOA and incremental utilities.",
+      "These are planning estimates, not lender quotes. Total housing cost includes the mortgage, tax, insurance, PMI, HOA, upkeep and any extra utilities.",
     fields: [
       { key: "price", label: "Home price", unit: "$" },
       { key: "down", label: "Down payment", unit: "%", max: 100 },
       { key: "downDollars", label: "Fixed-dollar down payment", unit: "$" },
       {
         key: "rate",
-        label: "Mortgage interest",
+        label: "Mortgage rate",
         unit: "%",
         step: 0.125,
         max: 30,
       },
-      { key: "term", label: "Mortgage term", unit: "years", max: 50 },
+      { key: "term", label: "Mortgage term", unit: "yrs", max: 50 },
       {
         key: "tax",
-        label: "Annual property tax / home value",
+        label: "Property tax / year",
         unit: "%",
         step: 0.1,
         max: 10,
+        note: "Percent of the home's value.",
       },
-      { key: "insurance", label: "Monthly homeowners insurance", unit: "$" },
+      { key: "insurance", label: "Home insurance / month", unit: "$" },
       {
         key: "pmi",
-        label: "Annual PMI / original loan",
+        label: "PMI / year",
         unit: "%",
         step: 0.1,
         max: 10,
+        note: "Percent of the loan. Applies below 20% down.",
       },
-      { key: "hoa", label: "Monthly HOA", unit: "$" },
+      { key: "hoa", label: "HOA / month", unit: "$" },
       {
         key: "maintenance",
-        label: "Annual maintenance / home value",
+        label: "Upkeep / year",
         unit: "%",
         step: 0.1,
         max: 10,
+        note: "Percent of the home's value. 1% is a common rule of thumb.",
       },
-      {
-        key: "utilities",
-        label: "Additional utilities after purchase",
-        unit: "$",
-      },
-      { key: "closing", label: "Closing costs / price", unit: "%", max: 30 },
-      { key: "moving", label: "Moving expenses", unit: "$" },
+      { key: "utilities", label: "Extra utilities / month", unit: "$" },
+      { key: "closing", label: "Closing costs", unit: "%", max: 30 },
+      { key: "moving", label: "Moving costs", unit: "$" },
       {
         key: "appreciation",
-        label: "Assumed annual appreciation",
+        label: "Home value growth / year",
         unit: "%",
         max: 30,
       },
     ],
   },
   {
-    title: "Savings, timing & investments",
+    title: "Savings & investing",
+    icon: "piggy",
     intro:
-      "A zero contribution limit directs all modeled cash flow into savings. A positive limit caps cash accumulation; unallocated surplus is excluded from projected assets. Investment contributions reduce available cash. Return assumptions are speculative.",
+      "With no limit set, all money left over each month goes into savings. A limit caps what you save; the rest is treated as spent. Investment returns are guesses.",
     fields: [
-      { key: "savings", label: "Starting savings", unit: "$" },
-      {
-        key: "months",
-        label: "Months until purchase",
-        unit: "months",
-        max: 360,
-      },
+      { key: "savings", label: "Savings today", unit: "$" },
+      { key: "months", label: "Months until you buy", unit: "mo", max: 360 },
       {
         key: "savingsRate",
-        label: "Annual cash savings interest",
+        label: "Savings interest / year",
         unit: "%",
         max: 30,
       },
       {
         key: "preContribution",
-        label: "Pre-purchase monthly saving limit",
+        label: "Saving limit before buying / month",
         unit: "$",
       },
       {
         key: "postContribution",
-        label: "Post-purchase monthly saving limit",
+        label: "Saving limit after buying / month",
         unit: "$",
       },
-      {
-        key: "investment",
-        label: "Monthly investment contribution",
-        unit: "$",
-      },
+      { key: "investment", label: "Investing / month", unit: "$" },
       {
         key: "investmentReturn",
-        label: "Annual investment return",
+        label: "Investment return / year",
         unit: "%",
         max: 30,
       },
       {
         key: "horizon",
-        label: "Net-worth projection horizon",
-        unit: "months",
+        label: "Net-worth horizon",
+        unit: "mo",
         max: 360,
       },
     ],
   },
   {
-    title: "Hard limits & comfort requirements",
+    title: "Your limits",
+    icon: "shield",
     intro:
-      "Every feasible path must satisfy these limits. Comfortable salary keeps your monthly savings and cash reserves; break-even relaxes those two cushions to zero and retains your payment and DTI limits.",
+      "Every plan the planner suggests must stay inside these limits. Set them to what would let you sleep at night.",
     fields: [
       {
         key: "paymentLimit",
-        label: "Maximum TOTAL housing / month",
+        label: "Most you'd pay for housing / month",
         unit: "$",
       },
       {
         key: "after",
-        label: "Minimum savings after purchase / month",
+        label: "Least you'd save after buying / month",
         unit: "$",
       },
-      { key: "reserve", label: "Minimum cash remaining at closing", unit: "$" },
+      { key: "reserve", label: "Cash to keep after closing", unit: "$" },
       {
         key: "emergencyMonths",
-        label: "Emergency reserve / living expenses",
-        unit: "months",
+        label: "Emergency fund",
+        unit: "mo",
         max: 60,
+        note: "Months of living costs to keep after you buy.",
       },
-      { key: "dtiLimit", label: "Maximum legal-debt DTI", unit: "%", max: 100 },
+      {
+        key: "dtiLimit",
+        label: "Highest debt-to-income ratio",
+        unit: "%",
+        max: 100,
+        note: "Lenders often cap this near 43%.",
+      },
     ],
   },
+];
+const minOne = ["term", "months", "horizon", "price", "dtiLimit", "retention"];
+const wholeMonths = [
+  "months",
+  "horizon",
+  "raiseMonth",
+  "futureDebtMonth",
+  "reductionMonth",
+];
+type Tab =
+  | "setup"
+  | "plan"
+  | "priorities"
+  | "explore"
+  | "assumptions"
+  | "scenarios"
+  | "method";
+const nav: { key: Tab; label: string; icon: IconName }[] = [
+  { key: "plan", label: "Plan", icon: "target" },
+  { key: "priorities", label: "Priorities", icon: "sliders" },
+  { key: "explore", label: "Explore", icon: "compass" },
+  { key: "assumptions", label: "Assumptions", icon: "list" },
+  { key: "scenarios", label: "Scenarios", icon: "layers" },
 ];
 function initial() {
   try {
     const shared = decodeShare(window.location.hash);
-    const stored = localStorage.getItem("north-star.starting-plan.v1");
+    const stored = localStorage.getItem(STARTING_PLAN);
     return {
       s: shared ?? (stored ? validateScenario(JSON.parse(stored)) : defaults()),
       error: "",
@@ -295,10 +324,29 @@ function initial() {
     return { s: defaults(), error: (e as Error).message, ready: false };
   }
 }
+function PageHead({
+  title,
+  intro,
+  children,
+}: {
+  title: string;
+  intro: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="page-head">
+      <div>
+        <h1>{title}</h1>
+        <p>{intro}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
 export default function App() {
   const [init] = useState(initial),
     [s, setS] = useState<Scenario>(init.s),
-    [tab, setTab] = useState(init.ready ? "studio" : "setup"),
+    [tab, setTab] = useState<Tab>(init.ready ? "plan" : "setup"),
     [setupComplete, setSetupComplete] = useState(init.ready),
     [saved, setSaved] = useState<Scenario[]>([]),
     [message, setMessage] = useState(init.error),
@@ -317,7 +365,7 @@ export default function App() {
       setSaved(loadScenarios());
     } catch {
       setMessage(
-        "Saved scenarios could not be read. Your current plan is still available.",
+        "Saved scenarios could not be read. Your current plan is still here.",
       );
     }
   }, []);
@@ -335,7 +383,7 @@ export default function App() {
     };
     worker.onerror = () => {
       setMessage(
-        "The optimizer could not finish. Check your ranges and try resetting.",
+        "The planner could not finish. Check your ranges or reset to the example.",
       );
       setBusy(false);
     };
@@ -350,32 +398,20 @@ export default function App() {
     star = objectives[s.objective];
   const update = (key: keyof Profile, value: number | string | boolean) =>
     setS((old) => {
-      if (
-        [
-          "months",
-          "horizon",
-          "raiseMonth",
-          "loanMonth",
-          "reductionMonth",
-        ].includes(key)
-      )
-        value = Math.round(Number(value));
+      if (wholeMonths.includes(key)) value = Math.round(Number(value));
       const p = { ...old.profile, [key]: value };
-      if (["salary", "partnerSalary"].includes(key))
+      if (key === "salary" || key === "partnerSalary")
         p.net +=
           ((Number(value) - Number(old.profile[key])) * old.profile.retention) /
           1200;
-      if (["ownLoan", "medication", "rent", "dining"].includes(key))
+      // Parts of the spending total move the total by the same amount.
+      if (key === "rent" || key === "flexible" || key === "debtPayment")
         p.expenses += Number(value) - Number(old.profile[key]);
-      if (key === "plus" && p.includesPlus)
-        p.expenses += Number(value) - old.profile.plus;
-      if (key === "partnerLoan" && p.includesFutureLoan)
-        p.expenses += Number(value) - old.profile.partnerLoan;
-      if (key === "stateTax" || key === "localTax")
-        p.net -=
-          ((Number(value) - Number(old.profile[key])) *
-            (p.salary + p.partnerSalary)) /
-          1200;
+      if (
+        key === "flexible" &&
+        old.profile.flexibleTarget === old.profile.flexible
+      )
+        p.flexibleTarget = Number(value);
       const target =
         old.objective === "price" && key === "price"
           ? Number(value)
@@ -417,10 +453,15 @@ export default function App() {
       arr.splice(Math.max(0, Math.min(4, to)), 0, key);
       return { ...old, priorities: arr };
     });
+  const setRange = (k: Lever, r: Partial<Scenario["ranges"][Lever]>) =>
+    setS((old) => ({
+      ...old,
+      ranges: { ...old.ranges, [k]: { ...old.ranges[k], ...r } },
+    }));
   const persist = (list: Scenario[]) => {
     if (list.length > 50) {
       setMessage(
-        "Keep at most 50 scenarios. Export or delete an older plan first.",
+        "You can keep up to 50 scenarios. Export or delete one first.",
       );
       return false;
     }
@@ -430,7 +471,7 @@ export default function App() {
       return true;
     } catch {
       setMessage(
-        "Browser storage is unavailable or full. Export JSON to keep your scenarios.",
+        "Browser storage is full or blocked. Export JSON to keep your scenarios.",
       );
       return false;
     }
@@ -453,7 +494,8 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
   const thresholdBreak = useMemo(() => salaryThreshold(s, false), [s]),
-    thresholdComfort = useMemo(() => salaryThreshold(s, true), [s]);
+    thresholdComfort = useMemo(() => salaryThreshold(s, true), [s]),
+    priceCeiling = useMemo(() => maxPrice(s), [s]);
   const heroValue =
     s.objective === "price"
       ? money(s.target)
@@ -468,1158 +510,1045 @@ export default function App() {
               : star.unit === "$"
                 ? money(s.target)
                 : `${s.target} ${star.unit}`;
+  const heroLabel =
+    s.objective === "payment" || s.objective === "after"
+      ? "Home price you can reach"
+      : s.objective === "salary"
+        ? "Salary you need"
+        : s.objective === "rate"
+          ? "Highest rate that works"
+          : star.label;
+  const targetMax =
+    s.objective === "emergency"
+      ? 60
+      : star.unit === "%"
+        ? 100
+        : star.unit === "months"
+          ? 360
+          : 10000000;
+  const status = busy
+    ? { text: "Working…", tone: "busy" }
+    : best
+      ? { text: "Within your limits", tone: "good" }
+      : { text: "Changes needed", tone: "warn" };
+  const go = (t: Tab) => setTab(t);
+  const saveBar = (
+    <div className="save-bar">
+      <label>
+        <span>Scenario name</span>
+        <input
+          value={s.name}
+          maxLength={100}
+          onChange={(ev) => setS({ ...s, name: ev.target.value })}
+        />
+      </label>
+      <button className="primary" disabled={!s.name.trim()} onClick={save}>
+        <Icon name="save" /> Save this scenario
+      </button>
+    </div>
+  );
   return (
-    <>
-      <header className="site-header">
+    <div className="app">
+      <header className="topbar">
         <a
           className="brand"
           href="#"
           onClick={(ev) => {
             ev.preventDefault();
-            setTab(setupComplete ? "studio" : "setup");
+            go(setupComplete ? "plan" : "setup");
           }}
         >
-          <span className="star-mark" aria-hidden="true">
-            ✦
-          </span>{" "}
-          North Star<span className="brand-sub">FINANCIAL PLANNING STUDIO</span>
+          <span className="brand-mark" aria-hidden="true">
+            <Icon name="star" />
+          </span>
+          <span className="brand-name">North Star</span>
         </a>
         {tab !== "setup" && (
-          <nav aria-label="Main navigation">
-            {[
-              ["studio", "Plan"],
-              ["priorities", "Priorities"],
-              ["analysis", "Explore"],
-              ["assumptions", "Assumptions"],
-              ["scenarios", `Scenarios ${saved.length}`],
-            ].map(([key, label]) => (
+          <nav aria-label="Main navigation" className="tabs">
+            {nav.map((n) => (
               <button
-                key={key}
-                aria-current={tab === key ? "page" : undefined}
-                className={tab === key ? "active" : ""}
-                onClick={() => setTab(key)}
+                key={n.key}
+                aria-current={tab === n.key ? "page" : undefined}
+                className={tab === n.key ? "active" : ""}
+                onClick={() => go(n.key)}
               >
-                {label}
+                <Icon name={n.icon} />
+                <span>{n.label}</span>
+                {n.key === "scenarios" && saved.length > 0 && (
+                  <span className="count">{saved.length}</span>
+                )}
               </button>
             ))}
           </nav>
         )}
+        <span className="topbar-note">
+          Runs in your browser · nothing is uploaded
+        </span>
       </header>
-      <main tabIndex={-1}>
+      <main tabIndex={-1} className={`page page-${tab}`}>
         {message && (
-          <div className="notice" role="status">
-            {message}
-            <button aria-label="Dismiss message" onClick={() => setMessage("")}>
-              ×
+          <div className="toast" role="status">
+            <span>{message}</span>
+            <button
+              className="icon-button"
+              aria-label="Dismiss message"
+              onClick={() => setMessage("")}
+            >
+              <Icon name="x" />
             </button>
           </div>
         )}
-        {tab === "setup" && saved.length > 0 && (
-          <button onClick={() => setTab("scenarios")}>
-            Open saved scenarios
-          </button>
-        )}
         {tab === "setup" && (
-          <SetupWizard
-            scenario={s}
-            onCancel={setupComplete ? () => setTab("assumptions") : undefined}
-            onComplete={(plan) => {
-              setS(plan);
-              setSetupComplete(true);
-              setTab("studio");
-              try {
-                localStorage.setItem(
-                  "north-star.starting-plan.v1",
-                  JSON.stringify(plan),
-                );
-              } catch {
-                setMessage(
-                  "Setup is ready. Browser storage is unavailable; export your scenario to keep it.",
-                );
-              }
-            }}
-          />
-        )}
-        {["studio", "priorities", "analysis", "assumptions"].includes(tab) && (
           <>
-            {tab === "studio" && (
-              <section className="hero">
-                <div className="hero-copy">
-                  <span className="eyebrow">
-                    YOUR GOALS. YOUR PRIORITIES. YOUR PATH.
-                  </span>
-                  <h1>
-                    Give your future <br />a fixed point.
-                  </h1>
-                  <p>
-                    Choose what matters most. See what needs to change to make
-                    it possible.
-                  </p>
-                </div>
-                <div className="north-star-control">
-                  <label className="eyebrow" htmlFor="objective">
-                    <span className="copper">✦</span> MY NORTH STAR
-                  </label>
-                  <select
-                    id="objective"
-                    value={s.objective}
-                    onChange={(ev) => choose(ev.target.value as Objective)}
-                  >
-                    {Object.entries(objectives).map(([k, v]) => (
-                      <option key={k} value={k}>
-                        {v.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="target-control">
-                    {s.objective === "date" ? (
+            {saved.length > 0 && (
+              <button
+                className="ghost setup-saved"
+                onClick={() => go("scenarios")}
+              >
+                Open saved scenarios
+              </button>
+            )}
+            <SetupWizard
+              scenario={s}
+              onCancel={setupComplete ? () => go("assumptions") : undefined}
+              onComplete={(plan) => {
+                setS(plan);
+                setSetupComplete(true);
+                go("plan");
+                try {
+                  localStorage.setItem(STARTING_PLAN, JSON.stringify(plan));
+                } catch {
+                  setMessage(
+                    "Your plan is ready. Browser storage is blocked, so export it to keep it.",
+                  );
+                }
+              }}
+            />
+          </>
+        )}
+
+        {tab === "plan" && (
+          <>
+            <section className="goal-panel" aria-labelledby="goal-heading">
+              <div className="goal-intro">
+                <span className="kicker">
+                  <Icon name="star" /> Your north star
+                </span>
+                <h1 id="goal-heading">Pick one goal. See what it takes.</h1>
+                <p>
+                  Choose the outcome that matters most. North Star tests
+                  thousands of combinations and shows the changes that get you
+                  there inside your limits.
+                </p>
+              </div>
+              <div className="goal-control">
+                <label htmlFor="objective">Your goal</label>
+                <select
+                  id="objective"
+                  value={s.objective}
+                  onChange={(ev) => choose(ev.target.value as Objective)}
+                >
+                  {Object.entries(objectives).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="target-control">
+                  {s.objective === "date" ? (
+                    <input
+                      aria-label="Target purchase date"
+                      type="month"
+                      value={dateAt(s.profile.start, s.target)}
+                      min={dateAt(s.profile.start, 1)}
+                      max={dateAt(s.profile.start, 360)}
+                      onChange={(ev) =>
+                        targetChange(
+                          Math.max(
+                            1,
+                            monthDiff(s.profile.start, ev.target.value),
+                          ),
+                        )
+                      }
+                    />
+                  ) : s.objective === "salary" || s.objective === "rate" ? (
+                    <span className="target-auto">
+                      {s.objective === "rate"
+                        ? "Find the highest rate that works"
+                        : "Solve for the minimum"}
+                    </span>
+                  ) : (
+                    <div className="affix">
+                      {star.unit === "$" && <span>$</span>}
                       <input
-                        aria-label="Target purchase date"
-                        type="month"
-                        value={dateAt(s.profile.start, s.target)}
-                        min={dateAt(s.profile.start, 1)}
-                        max={dateAt(s.profile.start, 360)}
+                        aria-label="Goal target"
+                        type="number"
+                        min={star.unit === "months" ? 1 : 0}
+                        max={targetMax}
+                        step={star.unit === "%" ? 0.1 : 1}
+                        value={s.target}
                         onChange={(ev) =>
                           targetChange(
-                            Math.max(
-                              1,
-                              monthDiff(s.profile.start, ev.target.value),
+                            Math.min(
+                              targetMax,
+                              Math.max(
+                                star.unit === "months" ||
+                                  s.objective === "price"
+                                  ? 1
+                                  : 0,
+                                Number(ev.target.value),
+                              ),
                             ),
                           )
                         }
                       />
-                    ) : s.objective === "salary" || s.objective === "rate" ? (
-                      <span className="target-auto">
-                        {s.objective === "rate"
-                          ? "Find the highest tolerable rate"
-                          : "Solve for the minimum"}
-                      </span>
-                    ) : (
-                      <label>
-                        <span>{star.unit === "$" ? "$" : ""}</span>
-                        <input
-                          aria-label="North Star target"
-                          type="number"
-                          min={star.unit === "months" ? 1 : 0}
-                          max={
-                            s.objective === "emergency"
-                              ? 60
-                              : star.unit === "%"
-                                ? 100
-                                : star.unit === "months"
-                                  ? 360
-                                  : 10000000
-                          }
-                          step={star.unit === "%" ? 0.1 : 1}
-                          value={s.target}
-                          onChange={(ev) =>
-                            targetChange(
-                              Math.min(
-                                s.objective === "emergency"
-                                  ? 60
-                                  : star.unit === "%"
-                                    ? 100
-                                    : star.unit === "months"
-                                      ? 360
-                                      : 10000000,
-                                Math.max(
-                                  star.unit === "months" ||
-                                    s.objective === "price"
-                                    ? 1
-                                    : 0,
-                                  Number(ev.target.value),
-                                ),
-                              ),
-                            )
-                          }
-                        />
-                        <span>{star.unit !== "$" ? star.unit : ""}</span>
-                      </label>
-                    )}
-                  </div>
-                  <p>{star.description}</p>
-                  <span className="objective-mode">
-                    {s.mode === "maximize"
-                      ? s.objective === "rate"
-                        ? "Maximize rate within limits"
-                        : "Maximize price within limits"
-                      : s.mode === "minimize"
-                        ? "Minimize required salary"
-                        : "Meet a specific target"}
+                      {star.unit !== "$" && <span>{star.unit}</span>}
+                    </div>
+                  )}
+                </div>
+                <p className="hint">{star.description}</p>
+              </div>
+            </section>
+
+            <section className="result" aria-live="polite">
+              <div className="result-main">
+                <div className="result-top">
+                  <span className={`chip chip-${status.tone}`}>
+                    <span className="dot" aria-hidden="true" />
+                    {status.text}
+                  </span>
+                  <span className="result-caption">
+                    {busy
+                      ? "Testing combinations"
+                      : best
+                        ? "Best match for your priorities"
+                        : "Your plan as entered"}
                   </span>
                 </div>
-              </section>
-            )}
-            {tab !== "studio" && (
-              <div className="page-heading">
-                <h1>
-                  {tab === "priorities"
-                    ? "What can change?"
-                    : tab === "analysis"
-                      ? "Explore your options."
-                      : "Your financial assumptions."}
-                </h1>
-                <p>
-                  {tab === "priorities"
-                    ? "Rank what matters, then decide which variables can move."
-                    : tab === "analysis"
-                      ? "Compare possible paths and inspect the calculations behind them."
-                      : "Adjust the details when you need them."}
-                </p>
-              </div>
-            )}
-            <div className={`workspace focused-workspace ${tab}`}>
-              {tab === "priorities" && (
-                <aside className="controls">
-                  <section>
-                    <div className="section-heading">
-                      <span className="eyebrow">
-                        01 / THE ORDER THAT MATTERS
-                      </span>
-                      <h2>Your priorities.</h2>
-                    </div>
-                    <p className="small">
-                      Drag to reorder, or use the arrows. Earlier priorities win
-                      within the tolerance you set.
-                    </p>
-                    <ol className="priorities">
-                      {s.priorities.map((k, i) => (
-                        <li
-                          key={k}
-                          draggable
-                          onDragStart={() => setDrag(k)}
-                          onDragOver={(ev) => ev.preventDefault()}
-                          onDrop={() => {
-                            if (drag) reorder(drag, i);
-                            setDrag(null);
-                          }}
-                        >
-                          <span className="rank">0{i + 1}</span>
-                          <div>
-                            <strong>{priorityLabels[k]}</strong>
-                            <label className="tolerance">
-                              Tolerance{" "}
-                              <input
-                                type="number"
-                                aria-label={`${priorityLabels[k]} tolerance`}
-                                min="1"
-                                max="1000000"
-                                value={s.tolerances[k]}
-                                onChange={(ev) =>
-                                  setS({
-                                    ...s,
-                                    tolerances: {
-                                      ...s.tolerances,
-                                      [k]: Math.max(1, Number(ev.target.value)),
-                                    },
-                                  })
-                                }
-                              />{" "}
-                              {k === "months"
-                                ? "mo"
-                                : k === "salary"
-                                  ? "$/yr"
-                                  : "$"}
-                            </label>
-                          </div>
-                          <div className="reorder">
-                            <button
-                              disabled={i === 0}
-                              aria-label={`Move ${priorityLabels[k]} up`}
-                              onClick={() => reorder(k, i - 1)}
-                            >
-                              ↑
-                            </button>
-                            <button
-                              disabled={i === 4}
-                              aria-label={`Move ${priorityLabels[k]} down`}
-                              onClick={() => reorder(k, i + 1)}
-                            >
-                              ↓
-                            </button>
-                          </div>
+                <div className="hero-number">{heroValue}</div>
+                <p className="hero-label">{heroLabel}</p>
+                {best && (
+                  <div className="changes">
+                    <h2>What changes</h2>
+                    <ul>
+                      {best.changes.map((c) => (
+                        <li key={c}>
+                          <Icon name="check" />
+                          {c}
                         </li>
                       ))}
-                    </ol>
-                  </section>
-                  <details className="levers">
-                    <summary>
-                      <span className="eyebrow">02 / ROOM TO MOVE</span>
-                      <span>Locks & permitted ranges</span>
-                    </summary>
-                    <p className="small">
-                      The engine may change only flexible levers below. All
-                      other assumptions stay fixed. Payment, reserves, savings
-                      and DTI floors are hard constraints.
+                    </ul>
+                  </div>
+                )}
+                {!busy && !best && (
+                  <div className="conflicts">
+                    <h2>No plan fits your limits yet</h2>
+                    <ul>
+                      {e.violations.map((v) => (
+                        <li key={v}>
+                          <Icon name="alert" />
+                          {v}
+                        </li>
+                      ))}
+                    </ul>
+                    <p>
+                      Try allowing more time, a higher salary ceiling, a higher
+                      housing limit or a smaller cash cushion on the{" "}
+                      <button className="link" onClick={() => go("priorities")}>
+                        Priorities
+                      </button>{" "}
+                      page.
                     </p>
-                    {(Object.keys(s.ranges) as Lever[]).map((k) => (
-                      <div className="lever" key={k}>
-                        <div className="lever-top">
-                          <label htmlFor={`lock-${k}`}>{leverLabels[k]}</label>
-                          <button
-                            id={`lock-${k}`}
-                            aria-pressed={s.ranges[k].locked}
-                            onClick={() =>
+                  </div>
+                )}
+              </div>
+              <dl className="kpis">
+                <div>
+                  <dt>You buy in</dt>
+                  <dd>{monthLabel(p, p.months)}</dd>
+                </div>
+                <div>
+                  <dt>Housing / month</dt>
+                  <dd>
+                    <AnimatedMoney value={display.house.total} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Cash after closing</dt>
+                  <dd>
+                    <AnimatedMoney value={display.remaining} />
+                  </dd>
+                </div>
+                <div>
+                  <dt>Saved / month after</dt>
+                  <dd className={display.after < 0 ? "negative" : ""}>
+                    <AnimatedMoney value={display.after} />
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="card">
+              <Chart
+                p={p}
+                objective={s.objective}
+                protectedReserve={display.reserve}
+              />
+            </section>
+
+            <div className="next-steps">
+              {(
+                [
+                  [
+                    "priorities",
+                    "sliders",
+                    "Set priorities",
+                    "Rank what matters and choose what can change.",
+                  ],
+                  [
+                    "explore",
+                    "compass",
+                    "Explore paths",
+                    "Compare other routes and see the math.",
+                  ],
+                  [
+                    "assumptions",
+                    "list",
+                    "Edit assumptions",
+                    "Fine-tune income, spending and the home.",
+                  ],
+                ] as const
+              ).map(([t, icon, title, text]) => (
+                <button key={t} className="next" onClick={() => go(t)}>
+                  <Icon name={icon} />
+                  <span>
+                    <strong>{title}</strong>
+                    <small>{text}</small>
+                  </span>
+                  <Icon name="arrow" />
+                </button>
+              ))}
+            </div>
+            {saveBar}
+          </>
+        )}
+
+        {tab === "priorities" && (
+          <>
+            <PageHead
+              title="Your priorities"
+              intro="Rank what matters, then decide which numbers the planner is allowed to change."
+            />
+            <div className="two-col">
+              <section className="card">
+                <div className="card-head">
+                  <h2>What matters most</h2>
+                  <p>
+                    Drag to reorder, or use the arrows. Higher items win when
+                    two plans differ by more than the tolerance.
+                  </p>
+                </div>
+                <ol className="priorities">
+                  {s.priorities.map((k, i) => (
+                    <li
+                      key={k}
+                      draggable
+                      onDragStart={() => setDrag(k)}
+                      onDragOver={(ev) => ev.preventDefault()}
+                      onDrop={() => {
+                        if (drag) reorder(drag, i);
+                        setDrag(null);
+                      }}
+                    >
+                      <span className="rank">{i + 1}</span>
+                      <div className="priority-body">
+                        <strong>{priorityLabels[k]}</strong>
+                        <label className="tolerance">
+                          <span>Tolerance</span>
+                          <input
+                            type="number"
+                            aria-label={`${priorityLabels[k]} tolerance`}
+                            min="1"
+                            max="1000000"
+                            value={s.tolerances[k]}
+                            onChange={(ev) =>
                               setS({
                                 ...s,
-                                ranges: {
-                                  ...s.ranges,
-                                  [k]: {
-                                    ...s.ranges[k],
-                                    locked: !s.ranges[k].locked,
-                                  },
+                                tolerances: {
+                                  ...s.tolerances,
+                                  [k]: Math.max(1, Number(ev.target.value)),
                                 },
                               })
                             }
+                          />
+                          <span>
+                            {k === "months"
+                              ? "months"
+                              : k === "salary"
+                                ? "$ / yr"
+                                : "$"}
+                          </span>
+                        </label>
+                      </div>
+                      <div className="reorder">
+                        <button
+                          className="icon-button"
+                          disabled={i === 0}
+                          aria-label={`Move ${priorityLabels[k]} up`}
+                          onClick={() => reorder(k, i - 1)}
+                        >
+                          <Icon name="up" />
+                        </button>
+                        <button
+                          className="icon-button"
+                          disabled={i === 4}
+                          aria-label={`Move ${priorityLabels[k]} down`}
+                          onClick={() => reorder(k, i + 1)}
+                        >
+                          <Icon name="down" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+              <section className="card">
+                <div className="card-head">
+                  <h2>What can change</h2>
+                  <p>
+                    Locked numbers stay as entered. Flexible numbers may move
+                    inside the range you set. Your limits always apply.
+                  </p>
+                </div>
+                <div className="levers">
+                  {(Object.keys(s.ranges) as Lever[]).map((k) => {
+                    const r = s.ranges[k];
+                    const cap =
+                      k === "down"
+                        ? 100
+                        : k === "rate"
+                          ? 30
+                          : k === "months"
+                            ? 360
+                            : 10000000;
+                    const floor = k === "months" || k === "price" ? 1 : 0;
+                    return (
+                      <div
+                        className={`lever ${r.locked ? "is-locked" : ""}`}
+                        key={k}
+                      >
+                        <div className="lever-top">
+                          <div>
+                            <strong id={`lever-${k}`}>{leverLabels[k]}</strong>
+                            <small>{leverHints[k]}</small>
+                          </div>
+                          <button
+                            className="switch"
+                            aria-labelledby={`lever-${k}`}
+                            aria-pressed={r.locked}
+                            onClick={() => setRange(k, { locked: !r.locked })}
                           >
-                            {s.ranges[k].locked ? "Locked" : "Flexible"}
+                            <Icon name={r.locked ? "lock" : "unlock"} />
+                            {r.locked ? "Locked" : "Flexible"}
                           </button>
                         </div>
-                        {!s.ranges[k].locked && (
+                        {!r.locked && (
                           <div className="range-pair">
                             <label>
-                              From{" "}
+                              <span>From</span>
                               <input
                                 type="number"
                                 aria-label={`${leverLabels[k]} minimum`}
-                                min={k === "months" || k === "price" ? 1 : 0}
-                                value={s.ranges[k].min}
+                                min={floor}
+                                value={r.min}
                                 onChange={(ev) => {
                                   const min = Math.max(
-                                    k === "months" || k === "price" ? 1 : 0,
+                                    floor,
                                     Number(ev.target.value),
                                   );
-                                  setS({
-                                    ...s,
-                                    ranges: {
-                                      ...s.ranges,
-                                      [k]: {
-                                        ...s.ranges[k],
-                                        min,
-                                        max: Math.max(min, s.ranges[k].max),
-                                      },
-                                    },
+                                  setRange(k, {
+                                    min,
+                                    max: Math.max(min, r.max),
                                   });
                                 }}
                               />
                             </label>
-                            <span>—</span>
                             <label>
-                              To{" "}
+                              <span>To</span>
                               <input
                                 type="number"
                                 aria-label={`${leverLabels[k]} maximum`}
-                                min={s.ranges[k].min}
-                                max={
-                                  k === "down"
-                                    ? 100
-                                    : k === "rate"
-                                      ? 30
-                                      : k === "months"
-                                        ? 360
-                                        : 10000000
+                                min={r.min}
+                                max={cap}
+                                value={r.max}
+                                onChange={(ev) =>
+                                  setRange(k, {
+                                    max: Math.min(
+                                      cap,
+                                      Math.max(r.min, Number(ev.target.value)),
+                                    ),
+                                  })
                                 }
-                                value={s.ranges[k].max}
-                                onChange={(ev) => {
-                                  const cap =
-                                    k === "down"
-                                      ? 100
-                                      : k === "rate"
-                                        ? 30
-                                        : k === "months"
-                                          ? 360
-                                          : 10000000;
-                                  setS({
-                                    ...s,
-                                    ranges: {
-                                      ...s.ranges,
-                                      [k]: {
-                                        ...s.ranges[k],
-                                        max: Math.min(
-                                          cap,
-                                          Math.max(
-                                            s.ranges[k].min,
-                                            Number(ev.target.value),
-                                          ),
-                                        ),
-                                      },
-                                    },
-                                  });
-                                }}
                               />
                             </label>
                           </div>
                         )}
                       </div>
-                    ))}
-                    {s.profile.downMode === "dollars" && (
-                      <p className="warning">
-                        Fixed-dollar down payments require the down-payment
-                        lever to be locked.
-                      </p>
-                    )}
-                  </details>
-                </aside>
-              )}
-              {["studio", "analysis"].includes(tab) && (
-                <div className="analysis">
-                  {tab === "studio" && (
-                    <section className="main-result" aria-live="polite">
-                      <div className="result-heading">
-                        <span className="eyebrow">
-                          {busy
-                            ? "CALCULATING YOUR PATHS"
-                            : best
-                              ? "A FEASIBLE PATH WITHIN YOUR LIMITS"
-                              : "YOUR CURRENT PLAN"}
-                        </span>
-                        <span className={`status ${best ? "good" : ""}`}>
-                          {busy
-                            ? "Solving…"
-                            : best
-                              ? "Within constraints"
-                              : e.feasible
-                                ? "Feasible as entered"
-                                : "Changes needed"}
-                        </span>
-                      </div>
-                      <div className="statement">
-                        <span className="big-amount">{heroValue}</span>
-                        <p>
-                          {s.objective === "payment" || s.objective === "after"
-                            ? "Sampled affordable home price"
-                            : s.objective === "salary"
-                              ? "Required primary annual salary"
-                              : s.objective === "rate"
-                                ? "Maximum sampled mortgage rate"
-                                : star.label}
-                        </p>
-                      </div>
-                      <div className="result-metrics">
-                        <div>
-                          <span>Purchase</span>
-                          <strong>{monthLabel(p, p.months)}</strong>
-                        </div>
-                        <div>
-                          <span>All-in housing / mo</span>
-                          <strong>
-                            <AnimatedMoney value={display.house.total} />
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Cash after closing</span>
-                          <strong>
-                            <AnimatedMoney value={display.remaining} />
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Savings after / mo</span>
-                          <strong
-                            className={display.after < 0 ? "negative" : ""}
-                          >
-                            <AnimatedMoney value={display.after} />
-                          </strong>
-                        </div>
-                      </div>
-                      {!busy && !best && (
-                        <div className="conflicts">
-                          <strong>No feasible sampled path.</strong>
-                          <p>
-                            Within your current locks and ranges, the engine
-                            could not find a solution. This is not proof that no
-                            solution exists between grid points.
-                          </p>
-                          <ul>
-                            {e.violations.map((v) => (
-                              <li key={v}>{v}</li>
-                            ))}
-                          </ul>
-                          <p>
-                            Try extending the purchase range, raising the salary
-                            ceiling, increasing the housing limit, or relaxing a
-                            reserve floor.
-                          </p>
-                        </div>
-                      )}
-                      {best && (
-                        <p className="explanation">
-                          {best.changes.join(" · ")}. This is a hypothetical
-                          path; changes take effect from the model start unless
-                          a schedule is specified.
-                        </p>
-                      )}
-                    </section>
-                  )}
-                  {tab === "analysis" && (
-                    <details className="calculation">
-                      <summary>
-                        Follow the arithmetic <span>+</span>
-                      </summary>
-                      <div className="arithmetic">
-                        <div>
-                          <span>Principal &amp; interest / month</span>
-                          <strong>{money(display.house.pi)}</strong>
-                        </div>
-                        <div>
-                          <span>Tax + insurance + PMI / month</span>
-                          <strong>
-                            {money(display.house.piti - display.house.pi)}
-                          </strong>
-                        </div>
-                        <div>
-                          <span>
-                            Maintenance + HOA + additional utilities / month
-                          </span>
-                          <strong>
-                            {money(display.house.total - display.house.piti)}
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Down payment</span>
-                          <strong>
-                            {money(downAmount(p))} (
-                            {((downAmount(p) / p.price) * 100).toFixed(1)}%)
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Closing + moving expenses</span>
-                          <strong>
-                            {money(closingCash(p) - downAmount(p))}
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Savings immediately before closing</span>
-                          <strong>{money(display.cash)}</strong>
-                        </div>
-                        <div>
-                          <span>Required protected reserves</span>
-                          <strong>{money(display.reserve)}</strong>
-                        </div>
-                        <div>
-                          <span>Take-home income at purchase / month</span>
-                          <strong>{money(income(p, p.months))}</strong>
-                        </div>
-                        <div>
-                          <span>Modeled legal-debt DTI</span>
-                          <strong>{display.dti.toFixed(1)}%</strong>
-                        </div>
-                        <div>
-                          <span>Net worth at {monthLabel(p, p.horizon)}</span>
-                          <strong>{money(display.wealth)}</strong>
-                        </div>
-                        <div>
-                          <span>Ownership break-even after closing</span>
-                          <strong>
-                            {display.breakEven === null
-                              ? "Beyond 30 years"
-                              : `${display.breakEven} months`}
-                          </strong>
-                        </div>
-                      </div>
-                    </details>
-                  )}
-                  {tab === "studio" && (
-                    <Chart
-                      p={p}
-                      objective={s.objective}
-                      protectedReserve={display.reserve}
-                    />
-                  )}
-                  {tab === "analysis" && (
-                    <>
-                      <section className="thresholds">
-                        <span className="eyebrow">
-                          THE THRESHOLD / YOUR ENTERED PURCHASE PLAN
-                        </span>
-                        <h2>What has to be true?</h2>
-                        <div className="threshold-grid">
-                          <div>
-                            <span>Break-even primary salary</span>
-                            <strong>
-                              {thresholdBreak === null
-                                ? "No salary-only solution"
-                                : money(thresholdBreak)}
-                            </strong>
-                            <p>
-                              Zero extra cash cushion; retains all other targets
-                              and hard ceilings.
-                            </p>
-                          </div>
-                          <div>
-                            <span>Comfortable primary salary</span>
-                            <strong>
-                              {thresholdComfort === null
-                                ? "No salary-only solution"
-                                : money(thresholdComfort)}
-                            </strong>
-                            <p>
-                              Preserves {money(s.profile.reserve)} at closing
-                              and {money(s.profile.after)}/month after purchase,
-                              plus your emergency-month floor.
-                            </p>
-                          </div>
-                        </div>
-                        <div className="threshold-inline">
-                          <span>
-                            Average monthly cash saving needed by{" "}
-                            {monthLabel(s.profile, s.profile.months)}
-                          </span>
-                          <strong>
-                            {money(savingsRequired(s.profile) ?? 0)}
-                          </strong>
-                        </div>
-                        <div className="threshold-inline">
-                          <span>
-                            Maximum home price at entered income & purchase date
-                          </span>
-                          <strong>
-                            {maxPrice(s) === null
-                              ? "No feasible price"
-                              : money(maxPrice(s) ?? 0)}
-                          </strong>
-                        </div>
-                        <p className="small">
-                          Salary thresholds change primary salary alone at your
-                          entered date and down payment; they may exceed
-                          permitted optimization ranges. The constant monthly
-                          saving threshold includes cash interest and protected
-                          reserves.
-                        </p>
-                      </section>
-                      <section className="paths">
-                        <span className="eyebrow">
-                          MORE THAN ONE WAY FORWARD
-                        </span>
-                        <h2>Paths worth considering.</h2>
-                        <p className="small">
-                          Only computationally feasible, distinct paths appear.
-                          Alternatives hold different levers fixed, then follow
-                          your ranked priorities.
-                        </p>
-                        {busy ? (
-                          <p className="loading">Finding your paths…</p>
-                        ) : result?.paths.length ? (
-                          result.paths.map((path, i) => (
-                            <article className="path" key={path.name}>
-                              <div className="path-title">
-                                <span className="rank">0{i + 1}</span>
-                                <h3>{path.name}</h3>
-                                <button
-                                  onClick={() => {
-                                    setS({
-                                      ...s,
-                                      profile: path.e.p,
-                                      name: path.name,
-                                    });
-                                    setMessage(
-                                      "Path applied. Review its hypothetical changes in your assumptions.",
-                                    );
-                                  }}
-                                >
-                                  Use this path ↗
-                                </button>
-                              </div>
-                              <p>{path.changes.join(" · ")}</p>
-                              <div className="path-data">
-                                <span>{money(path.e.p.salary)} salary</span>
-                                <span>
-                                  {monthLabel(path.e.p, path.e.p.months)}{" "}
-                                  closing
-                                </span>
-                                <span>{money(path.e.remaining)} retained</span>
-                                <span>{money(path.e.after)}/mo saved</span>
-                              </div>
-                            </article>
-                          ))
-                        ) : (
-                          <p className="small">
-                            Adjust your constraints to discover viable
-                            alternatives.
-                          </p>
-                        )}
-                        <p className="method-note">{result?.method}</p>
-                      </section>
-                      <section className="sensitivity">
-                        <span className="eyebrow">
-                          SMALL MOVES / REAL CONSEQUENCES
-                        </span>
-                        <h2>How sensitive is your plan?</h2>
-                        <table>
-                          <caption>
-                            Each row changes one assumption in the entered plan.
-                          </caption>
-                          <thead>
-                            <tr>
-                              <th>Change</th>
-                              <th>Housing / mo</th>
-                              <th>After / mo</th>
-                              <th>Cash at closing</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {[
-                              {
-                                label: "Mortgage rate +1 point",
-                                p: { ...s.profile, rate: s.profile.rate + 1 },
-                              },
-                              {
-                                label: "Home price −$25,000",
-                                p: {
-                                  ...s.profile,
-                                  price: Math.max(1, s.profile.price - 25000),
-                                },
-                              },
-                              {
-                                label: "Dining target $300/mo",
-                                p: { ...s.profile, diningTarget: 300 },
-                              },
-                              {
-                                label: "Wait another 12 months",
-                                p: {
-                                  ...s.profile,
-                                  months: Math.min(360, s.profile.months + 12),
-                                },
-                              },
-                            ].map((x) => {
-                              const d = evaluate(s, x.p);
-                              return (
-                                <tr key={x.label}>
-                                  <th>{x.label}</th>
-                                  <td>{money(d.house.total)}</td>
-                                  <td>{money(d.after)}</td>
-                                  <td>{money(d.remaining)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </section>
-                    </>
-                  )}
+                    );
+                  })}
                 </div>
-              )}
-            </div>
-            {tab === "assumptions" && (
-              <section className="assumptions">
-                <div className="section-heading">
-                  <span className="eyebrow">03 / MAKE IT YOURS</span>
-                  <h2>The assumptions behind your path.</h2>
-                </div>
-                <p>
-                  Greenfield, Hancock County, Indiana · Summary-level planning
-                  profile · Every amount is editable.
-                </p>
-                <div className="baseline-strip">
-                  <strong>
-                    {money(
-                      evaluate({
-                        ...s,
-                        profile: {
-                          ...s.profile,
-                          diningTarget: s.profile.dining,
-                        },
-                      }).before,
-                    )}{" "}
-                    current available cash / month
-                  </strong>
-                  <span>{money(s.profile.expenses)} spending baseline</span>
-                  <span>Primary loan included</span>
-                  <span>
-                    Parent PLUS{" "}
-                    {s.profile.includesPlus ? "included" : "added separately"}
-                  </span>
-                  <span>
-                    Future federal payment{" "}
-                    {s.profile.includesFutureLoan
-                      ? "included then scheduled"
-                      : "added on its start date"}
-                  </span>
-                </div>
-                <div className="profile-meta">
-                  <label>
-                    Model starts
-                    <input
-                      type="month"
-                      min="2020-01"
-                      max="2099-12"
-                      value={s.profile.start}
-                      onChange={(ev) => {
-                        if (ev.target.value) update("start", ev.target.value);
-                      }}
-                    />
-                  </label>
-                  <label>
-                    Filing status (descriptive)
-                    <select
-                      value={s.profile.filing}
-                      onChange={(ev) => update("filing", ev.target.value)}
-                    >
-                      <option>Married filing jointly</option>
-                      <option>Single</option>
-                      <option>Married filing separately</option>
-                      <option>Head of household</option>
-                    </select>
-                  </label>
-                  <label>
-                    Down-payment method
-                    <select
-                      value={s.profile.downMode}
-                      onChange={(ev) => {
-                        update("downMode", ev.target.value);
-                        if (ev.target.value === "dollars")
-                          setS((old) => ({
-                            ...old,
-                            ranges: {
-                              ...old.ranges,
-                              down: { ...old.ranges.down, locked: true },
-                            },
-                          }));
-                      }}
-                    >
-                      <option value="percent">Percentage of price</option>
-                      <option value="dollars">Fixed dollar amount</option>
-                    </select>
-                  </label>
-                </div>
-                {groups.map((g) => (
-                  <details key={g.title} className="input-group">
-                    <summary>
-                      {g.title}
-                      <span>+</span>
-                    </summary>
-                    <p>{g.intro}</p>
-                    {g.title.startsWith("Spending") && (
-                      <div className="inclusion">
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={s.profile.includesPlus}
-                            onChange={(ev) =>
-                              update("includesPlus", ev.target.checked)
-                            }
-                          />{" "}
-                          Baseline already contains Parent PLUS contribution
-                        </label>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={s.profile.includesFutureLoan}
-                            onChange={(ev) =>
-                              update("includesFutureLoan", ev.target.checked)
-                            }
-                          />{" "}
-                          Baseline already contains future partner payment
-                        </label>
-                        <p>
-                          Completed nose treatment: $0 future payments.
-                          Other-parent loans are excluded. Parent PLUS remains
-                          another person’s legal debt.
-                        </p>
-                      </div>
-                    )}
-                    <div className="fields">
-                      {g.fields.map((f) => (
-                        <label key={f.key}>
-                          {f.label}
-                          <div className="input-with-unit">
-                            <span>{f.unit === "$" ? "$" : ""}</span>
-                            <input
-                              type="number"
-                              min={
-                                [
-                                  "term",
-                                  "months",
-                                  "horizon",
-                                  "price",
-                                  "dtiLimit",
-                                  "retention",
-                                ].includes(f.key)
-                                  ? 1
-                                  : 0
-                              }
-                              max={f.max ?? 10000000}
-                              step={f.step ?? (f.unit === "$" ? 0.01 : 1)}
-                              value={s.profile[f.key] as number}
-                              onChange={(ev) => {
-                                const min = [
-                                  "term",
-                                  "months",
-                                  "horizon",
-                                  "price",
-                                  "dtiLimit",
-                                  "retention",
-                                ].includes(f.key)
-                                  ? 1
-                                  : 0;
-                                update(
-                                  f.key,
-                                  Math.min(
-                                    f.max ?? 10000000,
-                                    Math.max(min, Number(ev.target.value)),
-                                  ),
-                                );
-                              }}
-                            />
-                            <span>{f.unit === "$" ? "" : f.unit}</span>
-                          </div>
-                          {f.note && <small>{f.note}</small>}
-                        </label>
-                      ))}
-                    </div>
-                  </details>
-                ))}
-              </section>
-            )}
-            {tab === "studio" && (
-              <div className="plan-next">
-                <button onClick={() => setTab("priorities")}>
-                  Adjust priorities
-                </button>
-                <button onClick={() => setTab("analysis")}>
-                  Explore paths & calculations
-                </button>
-                <button onClick={() => setTab("assumptions")}>
-                  Edit assumptions
-                </button>
-              </div>
-            )}
-            {["studio", "assumptions"].includes(tab) && (
-              <div className="save-bar">
-                <label>
-                  Scenario name
-                  <input
-                    value={s.name}
-                    maxLength={100}
-                    onChange={(ev) => setS({ ...s, name: ev.target.value })}
-                  />
-                </label>
-                <button
-                  className="primary"
-                  disabled={!s.name.trim()}
-                  onClick={save}
-                >
-                  Save this scenario
-                </button>
-                {tab === "assumptions" && (
-                  <>
-                    <button onClick={() => setTab("setup")}>
-                      Edit starting numbers
-                    </button>
-                    <button
-                      onClick={() => {
-                        const b = defaults();
-                        b.profile.salary = 85000;
-                        b.profile.partnerSalary = 47000;
-                        b.profile.net += (17000 * b.profile.retention) / 1200;
-                        b.name = "Alternative salaries";
-                        setS(b);
-                      }}
-                    >
-                      Try $85k / $47k
-                    </button>
-                    <button onClick={() => setS(defaults())}>
-                      Reset defaults
-                    </button>
-                  </>
+                {s.profile.downMode === "dollars" && (
+                  <p className="warning">
+                    A fixed-dollar down payment needs the down payment lever
+                    locked.
+                  </p>
                 )}
-              </div>
-            )}
+              </section>
+            </div>
           </>
         )}
-        {tab === "scenarios" && (
-          <section className="scenario-page">
-            <span className="eyebrow">YOUR POSSIBLE FUTURES</span>
-            <h1>A plan is a starting point.</h1>
-            <p>
-              Saved scenarios stay in this browser. They do not sync between
-              devices. Export a JSON file to transfer or back them up.
-            </p>
-            <div className="scenario-tools">
-              <button className="primary" onClick={save}>
-                Save current plan
-              </button>
-              <button onClick={exportJson}>Export JSON</button>
-              <button onClick={() => file.current?.click()}>Import JSON</button>
-              <input
-                ref={file}
-                type="file"
-                accept="application/json,.json"
-                hidden
-                onChange={async (ev) => {
-                  const f = ev.target.files?.[0];
-                  if (!f) return;
-                  try {
-                    if (f.size > 1000000)
-                      throw new Error("File is limited to 1 MB.");
-                    const list = importScenarios(await f.text()).map((x) => ({
-                      ...x,
-                      id: crypto.randomUUID(),
-                    }));
-                    if (saved.length + list.length > 50)
-                      throw new Error(
-                        "Keep at most 50 scenarios in browser storage.",
-                      );
-                    if (persist([...saved, ...list]))
-                      setMessage(`Imported ${list.length} scenario(s).`);
-                  } catch (error) {
-                    setMessage((error as Error).message);
-                  }
-                  ev.target.value = "";
-                }}
-              />
-            </div>
-            <div className="share">
-              <h2>Share the destination.</h2>
-              <p>
-                By default, the link contains only your objective and target.
-                Household financial assumptions stay out of it.
-              </p>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={shareFull}
-                  onChange={(ev) => setShareFull(ev.target.checked)}
-                />{" "}
-                Include the full financial scenario (anyone with the link can
-                read it)
-              </label>
-              <button
-                onClick={async () => {
-                  const url =
-                    window.location.href.split("#")[0] +
-                    encodeShare(s, shareFull);
-                  try {
-                    await navigator.clipboard.writeText(url);
-                    setMessage(
-                      shareFull
-                        ? "Full financial scenario link copied."
-                        : "Goal-only link copied.",
-                    );
-                  } catch {
-                    setMessage(url);
-                  }
-                }}
-              >
-                Copy share link
-              </button>
-            </div>
-            {!saved.length && (
-              <p className="empty">
-                Your first saved scenario will appear here.
-              </p>
-            )}
-            {saved.map((item) => {
-              const ev = evaluate(item, item.profile, true);
-              return (
-                <article className="saved-scenario" key={item.id}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={compare.includes(item.id)}
-                      onChange={(event) =>
-                        setCompare(
-                          event.target.checked
-                            ? [...compare, item.id].slice(-4)
-                            : compare.filter((x) => x !== item.id),
-                        )
-                      }
-                    />{" "}
-                    Compare
-                  </label>
-                  <div>
-                    <h2>
-                      {item.name}{" "}
-                      {item.preferred && (
-                        <span className="copper">✦ Preferred</span>
-                      )}
-                    </h2>
-                    <p>
-                      {objectives[item.objective].label} ·{" "}
-                      {money(item.profile.price)} home ·{" "}
-                      {monthLabel(item.profile, item.profile.months)}
-                    </p>
-                  </div>
-                  <div className="scenario-actions">
-                    <button
-                      onClick={() => {
-                        setS(item);
-                        setSetupComplete(true);
-                        setTab("studio");
-                      }}
-                    >
-                      Open
-                    </button>
-                    <button
-                      onClick={() =>
-                        persist([
-                          ...saved,
-                          {
-                            ...item,
-                            id: crypto.randomUUID(),
-                            name: `${item.name} copy`.slice(0, 100),
-                            preferred: false,
-                          },
-                        ])
-                      }
-                    >
-                      Duplicate
-                    </button>
-                    <button
-                      onClick={() => {
-                        const name = window.prompt(
-                          "Rename scenario",
-                          item.name,
-                        );
-                        if (name?.trim())
-                          persist(
-                            saved.map((x) =>
-                              x.id === item.id
-                                ? { ...x, name: name.slice(0, 100) }
-                                : x,
-                            ),
-                          );
-                      }}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      onClick={() =>
-                        persist(
-                          saved.map((x) => ({
-                            ...x,
-                            preferred: x.id === item.id,
-                          })),
-                        )
-                      }
-                    >
-                      Prefer
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Delete “${item.name}”?`))
-                          persist(saved.filter((x) => x.id !== item.id));
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  <span className="small">
-                    {ev.feasible
-                      ? "Entered plan meets constraints"
-                      : "Entered plan needs changes"}
-                  </span>
-                </article>
-              );
-            })}
-            {compare.length > 0 && (
-              <div className="comparison">
-                <h2>Side by side.</h2>
+
+        {tab === "explore" && (
+          <>
+            <PageHead
+              title="Explore your options"
+              intro="Compare other routes to your goal and check the math behind them."
+            />
+            <section className="card">
+              <div className="card-head">
+                <h2>What has to be true?</h2>
+                <p>
+                  Based on the plan as entered: your purchase date, price and
+                  down payment.
+                </p>
+              </div>
+              <div className="stat-grid">
+                <div className="stat">
+                  <span>Lowest salary that works</span>
+                  <strong>
+                    {thresholdBreak === null
+                      ? "Salary alone can't fix it"
+                      : money(thresholdBreak)}
+                  </strong>
+                  <small>
+                    With no extra cash cushion. All other limits stay.
+                  </small>
+                </div>
+                <div className="stat">
+                  <span>Comfortable salary</span>
+                  <strong>
+                    {thresholdComfort === null
+                      ? "Salary alone can't fix it"
+                      : money(thresholdComfort)}
+                  </strong>
+                  <small>
+                    Keeps {money(s.profile.reserve)} at closing and{" "}
+                    {money(s.profile.after)}/month saving after.
+                  </small>
+                </div>
+                <div className="stat">
+                  <span>Monthly saving needed</span>
+                  <strong>{money(savingsRequired(s.profile) ?? 0)}</strong>
+                  <small>
+                    Average to have closing cash and reserves by{" "}
+                    {monthLabel(s.profile, s.profile.months)}.
+                  </small>
+                </div>
+                <div className="stat">
+                  <span>Most home you can afford</span>
+                  <strong>
+                    {priceCeiling === null
+                      ? "No price fits"
+                      : money(priceCeiling)}
+                  </strong>
+                  <small>At your current income and purchase date.</small>
+                </div>
+              </div>
+            </section>
+            <section className="card">
+              <div className="card-head">
+                <h2>Paths worth considering</h2>
+                <p>
+                  Each path holds different numbers fixed, then follows your
+                  priorities. Only paths that pass every limit appear.
+                </p>
+              </div>
+              {busy ? (
+                <p className="loading">Finding your paths…</p>
+              ) : result?.paths.length ? (
+                <div className="paths">
+                  {result.paths.map((path, i) => (
+                    <article className="path" key={path.name}>
+                      <div className="path-head">
+                        <span className="rank">{i + 1}</span>
+                        <h3>{path.name}</h3>
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            setS({ ...s, profile: path.e.p, name: path.name });
+                            setMessage(
+                              "Path applied. Check the changes on the Assumptions page.",
+                            );
+                          }}
+                        >
+                          Use this path
+                        </button>
+                      </div>
+                      <p>{path.changes.join(" · ")}</p>
+                      <dl className="path-data">
+                        <div>
+                          <dt>Salary</dt>
+                          <dd>{money(path.e.p.salary)}</dd>
+                        </div>
+                        <div>
+                          <dt>Buy in</dt>
+                          <dd>{monthLabel(path.e.p, path.e.p.months)}</dd>
+                        </div>
+                        <div>
+                          <dt>Cash left</dt>
+                          <dd>{money(path.e.remaining)}</dd>
+                        </div>
+                        <div>
+                          <dt>Saved / mo</dt>
+                          <dd>{money(path.e.after)}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty">
+                  No path fits yet. Loosen a limit or allow more numbers to
+                  change.
+                </p>
+              )}
+              <p className="fine">{result?.method}</p>
+            </section>
+            <div className="two-col">
+              <section className="card">
+                <div className="card-head">
+                  <h2>How sensitive is your plan?</h2>
+                  <p>Each row changes one number in the plan as entered.</p>
+                </div>
                 <div className="table-scroll">
                   <table>
-                    <caption>
-                      Comparison of entered plans (not proposed optimizer
-                      paths).
-                    </caption>
+                    <thead>
+                      <tr>
+                        <th>Change</th>
+                        <th>Housing / mo</th>
+                        <th>Saved / mo</th>
+                        <th>Cash left</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        {
+                          label: "Rate +1 point",
+                          p: { ...s.profile, rate: s.profile.rate + 1 },
+                        },
+                        {
+                          label: "Price −$25,000",
+                          p: {
+                            ...s.profile,
+                            price: Math.max(1, s.profile.price - 25000),
+                          },
+                        },
+                        {
+                          label: "Flexible spending −$150",
+                          p: {
+                            ...s.profile,
+                            flexibleTarget: Math.max(
+                              0,
+                              s.profile.flexibleTarget - 150,
+                            ),
+                          },
+                        },
+                        {
+                          label: "Wait 12 more months",
+                          p: {
+                            ...s.profile,
+                            months: Math.min(360, s.profile.months + 12),
+                          },
+                        },
+                      ].map((x) => {
+                        const d = evaluate(s, x.p);
+                        return (
+                          <tr key={x.label}>
+                            <th>{x.label}</th>
+                            <td>{money(d.house.total)}</td>
+                            <td>{money(d.after)}</td>
+                            <td>{money(d.remaining)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <section className="card">
+                <div className="card-head">
+                  <h2>The arithmetic</h2>
+                  <p>For the plan shown on the Plan page.</p>
+                </div>
+                <dl className="ledger">
+                  <div>
+                    <dt>Principal &amp; interest / mo</dt>
+                    <dd>{money(display.house.pi)}</dd>
+                  </div>
+                  <div>
+                    <dt>Tax, insurance &amp; PMI / mo</dt>
+                    <dd>{money(display.house.piti - display.house.pi)}</dd>
+                  </div>
+                  <div>
+                    <dt>Upkeep, HOA &amp; utilities / mo</dt>
+                    <dd>{money(display.house.total - display.house.piti)}</dd>
+                  </div>
+                  <div>
+                    <dt>Down payment</dt>
+                    <dd>
+                      {money(downAmount(p))} (
+                      {((downAmount(p) / p.price) * 100).toFixed(1)}%)
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Closing &amp; moving</dt>
+                    <dd>{money(closingCash(p) - downAmount(p))}</dd>
+                  </div>
+                  <div>
+                    <dt>Savings just before closing</dt>
+                    <dd>{money(display.cash)}</dd>
+                  </div>
+                  <div>
+                    <dt>Cash you must keep</dt>
+                    <dd>{money(display.reserve)}</dd>
+                  </div>
+                  <div>
+                    <dt>Take-home at purchase / mo</dt>
+                    <dd>{money(income(p, p.months))}</dd>
+                  </div>
+                  <div>
+                    <dt>Debt-to-income</dt>
+                    <dd>{display.dti.toFixed(1)}%</dd>
+                  </div>
+                  <div>
+                    <dt>Net worth in {monthLabel(p, p.horizon)}</dt>
+                    <dd>{money(display.wealth)}</dd>
+                  </div>
+                  <div>
+                    <dt>Beats renting after</dt>
+                    <dd>
+                      {display.breakEven === null
+                        ? "More than 30 years"
+                        : `${display.breakEven} months`}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+          </>
+        )}
+
+        {tab === "assumptions" && (
+          <>
+            <PageHead
+              title="Your assumptions"
+              intro="Every number behind the plan. Change any of them; the plan updates as you type."
+            >
+              <div className="head-actions">
+                <button className="secondary" onClick={() => go("setup")}>
+                  Edit starting numbers
+                </button>
+                <button className="ghost" onClick={() => setS(defaults())}>
+                  Reset to example
+                </button>
+              </div>
+            </PageHead>
+            <div className="summary-strip">
+              <div>
+                <span>Left over today / month</span>
+                <strong className={e.before < 0 ? "negative" : ""}>
+                  {money(
+                    evaluate({
+                      ...s,
+                      profile: {
+                        ...s.profile,
+                        flexibleTarget: s.profile.flexible,
+                      },
+                    }).before,
+                  )}
+                </strong>
+              </div>
+              <div>
+                <span>Take-home / month</span>
+                <strong>{money(s.profile.net)}</strong>
+              </div>
+              <div>
+                <span>Spending / month</span>
+                <strong>{money(s.profile.expenses)}</strong>
+              </div>
+              <div>
+                <span>Savings today</span>
+                <strong>{money(s.profile.savings)}</strong>
+              </div>
+            </div>
+            <section className="card meta-card">
+              <label>
+                <span>Plan starts</span>
+                <input
+                  type="month"
+                  min="2020-01"
+                  max="2099-12"
+                  value={s.profile.start}
+                  onChange={(ev) => {
+                    if (ev.target.value) update("start", ev.target.value);
+                  }}
+                />
+              </label>
+              <label>
+                <span>Down payment set as</span>
+                <select
+                  value={s.profile.downMode}
+                  onChange={(ev) => {
+                    update("downMode", ev.target.value);
+                    if (ev.target.value === "dollars")
+                      setRange("down", { locked: true });
+                  }}
+                >
+                  <option value="percent">Percent of price</option>
+                  <option value="dollars">Fixed dollar amount</option>
+                </select>
+              </label>
+            </section>
+            <div className="groups">
+              {groups.map((g, gi) => (
+                <details key={g.title} className="group card" open={gi < 2}>
+                  <summary>
+                    <span className="group-icon">
+                      <Icon name={g.icon} />
+                    </span>
+                    <span className="group-title">{g.title}</span>
+                    <Icon name="chevron" />
+                  </summary>
+                  <p className="group-intro">{g.intro}</p>
+                  <div className="fields">
+                    {g.fields.map((f) => (
+                      <div key={f.key} className="field">
+                        <label htmlFor={`f-${f.key}`}>{f.label}</label>
+                        <div className="affix">
+                          {f.unit === "$" && <span aria-hidden="true">$</span>}
+                          <input
+                            id={`f-${f.key}`}
+                            aria-describedby={
+                              f.note ? `f-${f.key}-note` : undefined
+                            }
+                            type="number"
+                            min={minOne.includes(f.key) ? 1 : 0}
+                            max={f.max ?? 10000000}
+                            step={f.step ?? (f.unit === "$" ? 0.01 : 1)}
+                            value={s.profile[f.key] as number}
+                            onChange={(ev) =>
+                              update(
+                                f.key,
+                                Math.min(
+                                  f.max ?? 10000000,
+                                  Math.max(
+                                    minOne.includes(f.key) ? 1 : 0,
+                                    Number(ev.target.value),
+                                  ),
+                                ),
+                              )
+                            }
+                          />
+                          {f.unit && f.unit !== "$" && (
+                            <span aria-hidden="true">{f.unit}</span>
+                          )}
+                        </div>
+                        {f.note && (
+                          <small id={`f-${f.key}-note`}>{f.note}</small>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+            {saveBar}
+          </>
+        )}
+
+        {tab === "scenarios" && (
+          <>
+            <PageHead
+              title="Scenarios"
+              intro="Save versions of your plan and compare them side by side. Scenarios stay in this browser only."
+            >
+              <div className="head-actions">
+                <button className="primary" onClick={save}>
+                  <Icon name="save" /> Save current plan
+                </button>
+                <button className="secondary" onClick={exportJson}>
+                  Export JSON
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() => file.current?.click()}
+                >
+                  Import JSON
+                </button>
+                <input
+                  ref={file}
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={async (ev) => {
+                    const f = ev.target.files?.[0];
+                    if (!f) return;
+                    try {
+                      if (f.size > 1000000)
+                        throw new Error("Files are limited to 1 MB.");
+                      const list = importScenarios(await f.text()).map((x) => ({
+                        ...x,
+                        id: crypto.randomUUID(),
+                      }));
+                      if (saved.length + list.length > 50)
+                        throw new Error("You can keep up to 50 scenarios.");
+                      if (persist([...saved, ...list]))
+                        setMessage(`Imported ${list.length} scenario(s).`);
+                    } catch (error) {
+                      setMessage((error as Error).message);
+                    }
+                    ev.target.value = "";
+                  }}
+                />
+              </div>
+            </PageHead>
+            {!saved.length && (
+              <div className="card empty-state">
+                <Icon name="layers" />
+                <p>Your saved scenarios will appear here.</p>
+              </div>
+            )}
+            <div className="scenario-list">
+              {saved.map((item) => {
+                const ev = evaluate(item, item.profile, true);
+                return (
+                  <article className="scenario card" key={item.id}>
+                    <label className="compare-check">
+                      <input
+                        type="checkbox"
+                        checked={compare.includes(item.id)}
+                        onChange={(event) =>
+                          setCompare(
+                            event.target.checked
+                              ? [...compare, item.id].slice(-4)
+                              : compare.filter((x) => x !== item.id),
+                          )
+                        }
+                      />
+                      <span>Compare</span>
+                    </label>
+                    <div className="scenario-body">
+                      <h2>
+                        {item.name}
+                        {item.preferred && (
+                          <span className="chip chip-star">
+                            <Icon name="star" /> Preferred
+                          </span>
+                        )}
+                      </h2>
+                      <p>
+                        {objectives[item.objective].label} ·{" "}
+                        {money(item.profile.price)} home ·{" "}
+                        {monthLabel(item.profile, item.profile.months)}
+                      </p>
+                      <span
+                        className={`chip chip-${ev.feasible ? "good" : "warn"}`}
+                      >
+                        <span className="dot" aria-hidden="true" />
+                        {ev.feasible ? "Works as entered" : "Needs changes"}
+                      </span>
+                    </div>
+                    <div className="scenario-actions">
+                      <button
+                        className="secondary"
+                        onClick={() => {
+                          setS(item);
+                          setSetupComplete(true);
+                          go("plan");
+                        }}
+                      >
+                        Open
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() =>
+                          persist([
+                            ...saved,
+                            {
+                              ...item,
+                              id: crypto.randomUUID(),
+                              name: `${item.name} copy`.slice(0, 100),
+                              preferred: false,
+                            },
+                          ])
+                        }
+                      >
+                        Duplicate
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() => {
+                          const name = window.prompt(
+                            "Rename scenario",
+                            item.name,
+                          );
+                          if (name?.trim())
+                            persist(
+                              saved.map((x) =>
+                                x.id === item.id
+                                  ? { ...x, name: name.slice(0, 100) }
+                                  : x,
+                              ),
+                            );
+                        }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        className="ghost"
+                        onClick={() =>
+                          persist(
+                            saved.map((x) => ({
+                              ...x,
+                              preferred: x.id === item.id,
+                            })),
+                          )
+                        }
+                      >
+                        Prefer
+                      </button>
+                      <button
+                        className="ghost danger"
+                        onClick={() => {
+                          if (window.confirm(`Delete “${item.name}”?`))
+                            persist(saved.filter((x) => x.id !== item.id));
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {compare.length > 0 && (
+              <section className="card">
+                <div className="card-head">
+                  <h2>Side by side</h2>
+                  <p>Plans as entered, not the planner's suggested paths.</p>
+                </div>
+                <div className="table-scroll">
+                  <table>
                     <thead>
                       <tr>
                         <th>Measure</th>
@@ -1632,11 +1561,11 @@ export default function App() {
                     </thead>
                     <tbody>
                       {[
-                        "Price",
+                        "Home price",
                         "Housing / month",
-                        "Savings after / month",
+                        "Saved / month after",
                         "Cash after closing",
-                        "Primary salary",
+                        "Salary",
                         "Net worth at horizon",
                       ].map((label, i) => (
                         <tr key={label}>
@@ -1665,115 +1594,112 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </section>
             )}
-          </section>
+            <section className="card share">
+              <div className="card-head">
+                <h2>Share your goal</h2>
+                <p>
+                  By default the link holds only your goal and target. Your
+                  financial numbers stay out of it.
+                </p>
+              </div>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={shareFull}
+                  onChange={(ev) => setShareFull(ev.target.checked)}
+                />
+                <span>
+                  Include all my numbers (anyone with the link can read them)
+                </span>
+              </label>
+              <button
+                className="secondary"
+                onClick={async () => {
+                  const url =
+                    window.location.href.split("#")[0] +
+                    encodeShare(s, shareFull);
+                  try {
+                    await navigator.clipboard.writeText(url);
+                    setMessage(
+                      shareFull
+                        ? "Full scenario link copied."
+                        : "Goal-only link copied.",
+                    );
+                  } catch {
+                    setMessage(url);
+                  }
+                }}
+              >
+                <Icon name="link" /> Copy share link
+              </button>
+            </section>
+          </>
         )}
+
         {tab === "method" && (
-          <section className="method-page">
-            <span className="eyebrow">TRANSPARENT BY DESIGN</span>
-            <h1>Numbers with a reason.</h1>
-            <div className="method-columns">
-              <article>
-                <h2>Hard constraints first.</h2>
-                <p>
-                  Home price targets, housing ceilings, savings floors,
-                  reserves, legal-debt DTI and locked levers are tested before a
-                  recommendation appears. An impossible or unsampled combination
-                  produces no path.
-                </p>
-                <h2>Then your priorities.</h2>
-                <p>
-                  North Star searches bounded grids for down payment, dining
-                  spending, purchase timing and, when enabled, price and rate.
-                  Primary salary is solved with bisection. The primary objective
-                  comes first; flexible preferences are ranked lexicographically
-                  in tolerance-sized bands, followed by exact tie-breaking.
-                  Rankings are preferences, not equations.
-                </p>
-                <p>
-                  Search resolution: 13 home prices, 10 down payments, 5 dining
-                  levels, 9 purchase times, and 17 rates for a rate objective,
-                  plus entered values and a date deadline. This is a
-                  deterministic sampled search, not a certified global
-                  optimizer.
-                </p>
-                <h2>Mortgage mathematics.</h2>
-                <p>
-                  Monthly P&amp;I = principal × r / (1 − (1 + r)<sup>−n</sup>).
-                  With zero interest, it is principal / n. PMI is included below
-                  20% down and modeled to end at 78% of original value on the
-                  scheduled amortization path, assuming a conventional mortgage
-                  in good standing. Lender rules can differ.
-                </p>
-                <a
-                  href="https://www.consumerfinance.gov/ask-cfpb/when-can-i-remove-private-mortgage-insurance-pmi-from-my-loan-en-202/"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  CFPB: PMI termination ↗
-                </a>
-              </article>
-              <article>
-                <h2>A cash-flow model, not a ledger.</h2>
-                <p>
-                  Defaults are user-supplied summary estimates. The baseline
-                  includes the primary student-loan payment, medication and (as
-                  an explicit initial assumption) the Parent PLUS contribution.
-                  Future partner federal payments activate at month 24 unless
-                  changed.
-                </p>
-                <p>
-                  Before closing, available cash is take-home minus household
-                  spending and investments. After closing, rent is removed and
-                  total housing costs replace it. Extra utilities are
-                  incremental to the baseline. Contribution caps exclude
-                  unallocated surplus from asset projections.
-                </p>
-                <h2>Assumptions stay visible.</h2>
-                <p>
-                  Interest rates, income growth, future returns, appreciation
-                  and spending inflation are planning inputs. The optimizer does
-                  not change them unless you explicitly enable a supported
-                  lever. Taxes use a calibrated marginal take-home percentage;
-                  this is not a tax return calculation.
-                </p>
-                <h2>Net worth & break-even.</h2>
-                <p>
-                  Net worth includes cash, modeled investments and home equity,
-                  less your two federal-loan balances. For this initial version,
-                  federal loans use zero-interest principal paydown, with
-                  modeled payments stopping when principal is repaid; repayment
-                  interest and forgiveness are not modeled. Parent PLUS is
-                  excluded from legal debt. No home sale costs are included.
-                </p>
-                <p>
-                  Ownership break-even compares incremental owner costs versus
-                  continuing to rent from the closing date. It includes mortgage
-                  equity, appreciation and forgone interest on down payment and
-                  closing cash. It excludes selling costs and tax benefits. The
-                  input horizon is months after purchase.
-                </p>
-                <h2>Private by architecture.</h2>
-                <p>
-                  All calculations run on your device. No bank connections,
-                  analytics, database or login. Saved scenarios are
-                  browser-specific. Goal-only links omit your profile; full
-                  links expose included financial assumptions.
-                </p>
-              </article>
+          <>
+            <PageHead
+              title="How the math works"
+              intro="North Star is a planning tool, not financial advice. Here is exactly what it does."
+            />
+            <div className="method-grid">
+              {[
+                [
+                  "Limits come first",
+                  "Every suggested plan must meet your goal, your housing limit, your cash cushion, your monthly saving floor and your debt-to-income limit. If nothing passes, North Star says so instead of inventing an answer.",
+                ],
+                [
+                  "Then your priorities",
+                  "The planner searches a grid of prices, down payments, flexible-spending levels, purchase dates and (when allowed) rates, and solves for salary. Plans that pass are ranked by your priority order, in steps the size of each tolerance. It is a sampled search, so it can miss a plan that falls between grid points.",
+                ],
+                [
+                  "Mortgage math",
+                  "Monthly principal and interest = loan × r ÷ (1 − (1 + r)^−n), where r is the monthly rate and n the number of payments. PMI applies below 20% down and ends when the scheduled balance reaches 78% of the original price, as on a typical conventional loan.",
+                ],
+                [
+                  "Cash flow, not a budget app",
+                  "Before you buy, money left over = take-home pay − spending − investing. After you buy, rent drops out and the full cost of owning replaces it. Debt payments stop once their balances are paid. Debts are modeled as interest-free paydown.",
+                ],
+                [
+                  "Your assumptions stay yours",
+                  "Interest rates, raises, investment returns, home value growth and inflation are inputs you control. The planner never changes them unless you make them flexible. Taxes use a simple 'share of a raise you keep' estimate.",
+                ],
+                [
+                  "Private by design",
+                  "Everything runs in your browser. No accounts, bank connections, analytics or servers. Saved scenarios live only in this browser. Goal-only share links leave your numbers out.",
+                ],
+              ].map(([h, t]) => (
+                <article className="card" key={h}>
+                  <h2>{h}</h2>
+                  <p>{t}</p>
+                </article>
+              ))}
             </div>
-          </section>
+            <p className="fine">
+              PMI rules:{" "}
+              <a
+                href="https://www.consumerfinance.gov/ask-cfpb/when-can-i-remove-private-mortgage-insurance-pmi-from-my-loan-en-202/"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Consumer Financial Protection Bureau
+              </a>
+              .
+            </p>
+          </>
         )}
       </main>
-      <footer>
+      <footer className="footer">
         <span>
-          <span className="copper">✦</span> NORTH STAR
+          <Icon name="star" /> North Star
         </span>
-        <p>Your goals. Your priorities. Your path.</p>
-        <span>Client-side planning · v1.0</span>
-        <button onClick={() => setTab("method")}>How calculations work</button>
+        <span>A planning tool, not financial advice.</span>
+        <button className="link" onClick={() => go("method")}>
+          How the math works
+        </button>
       </footer>
-    </>
+    </div>
   );
 }

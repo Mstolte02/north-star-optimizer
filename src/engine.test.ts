@@ -26,17 +26,36 @@ import {
   encodeShare,
   decodeShare,
 } from "./persistence";
+// A comfortable two-income household with a larger home goal.
 const easy = () => {
   const s = defaults();
+  s.target = 400000;
   s.profile = {
     ...s.profile,
+    salary: 70000,
+    raiseSalary: 70000,
+    partnerSalary: 45000,
+    retention: 75,
     net: 12000,
+    expenses: 6726,
+    rent: 1826,
+    flexible: 635,
+    flexibleTarget: 635,
+    debtPayment: 298.67,
+    debtBalance: 26291,
     savings: 150000,
+    price: 400000,
+    tax: 1,
+    insurance: 150,
+    reserve: 20000,
     paymentLimit: 5000,
     dtiLimit: 70,
     after: 750,
     months: 36,
   };
+  s.ranges.salary = { locked: false, min: 70000, max: 160000 };
+  s.ranges.spending = { locked: false, min: 300, max: 635 };
+  s.ranges.price = { locked: true, min: 150000, max: 650000 };
   return s;
 };
 describe("independently verified mortgage mathematics", () => {
@@ -56,80 +75,77 @@ describe("independently verified mortgage mathematics", () => {
   });
   it("calculates percentages, fixed dollar down payments and closing costs", () => {
     const p = defaults().profile;
-    expect(downAmount(p)).toBe(40000);
-    expect(closingCash(p)).toBe(54000);
+    expect(downAmount(p)).toBe(30000);
+    expect(closingCash(p)).toBe(41000);
     expect(downAmount({ ...p, downMode: "dollars", downDollars: 25000 })).toBe(
       25000,
     );
   });
   it("includes PMI below 20 percent and removes at scheduled 78 percent LTV", () => {
     const p = defaults().profile;
-    expect(housing(p).pmi).toBe(150);
+    expect(housing(p).pmi).toBe(112.5);
     expect(housing({ ...p, down: 20 }).pmi).toBe(0);
     expect(housing(p, 240).pmi).toBe(0);
   });
 });
 describe("cash flow, inclusion and accumulation", () => {
-  it("reproduces the 673 baseline with no double-counted loans", () => {
+  it("counts debt payments inside total spending exactly once", () => {
     const p = defaults().profile;
-    expect(cashFlow(p, 0)).toBeCloseTo(673);
-    expect(cashFlow(p, 24)).toBeCloseTo(423);
-  });
-  it("adds PLUS only when not included and schedules future payments already in baseline", () => {
-    const p = defaults().profile;
-    expect(cashFlow({ ...p, includesPlus: false }, 0)).toBeCloseTo(
-      673 - 745.88,
+    expect(cashFlow(p, 0)).toBeCloseTo(1200);
+    expect(cashFlow({ ...p, debtPayment: 0, expenses: 3200 }, 0)).toBeCloseTo(
+      1500,
     );
-    expect(
-      cashFlow(
-        { ...p, expenses: p.expenses + 250, includesFutureLoan: true },
-        0,
-      ),
-    ).toBeCloseTo(673);
-    expect(
-      cashFlow(
-        { ...p, expenses: p.expenses + 250, includesFutureLoan: true },
-        24,
-      ),
-    ).toBeCloseTo(423);
   });
-  it("replaces rent with all-in ownership and preserves legal debt distinction", () => {
+  it("adds a future debt payment only from its start month", () => {
+    const p = {
+      ...defaults().profile,
+      futureDebtPayment: 250,
+      futureDebtBalance: 10000,
+      futureDebtMonth: 12,
+    };
+    expect(cashFlow(p, 11)).toBeCloseTo(1200);
+    expect(cashFlow(p, 12)).toBeCloseTo(950);
+  });
+  it("replaces rent with all-in ownership and counts debt in DTI", () => {
     const s = defaults(),
       p = s.profile;
-    expect(cashFlow(p, 32, true)).toBeCloseTo(
-      7399 - 6726 - 250 + 1826 - housing(p).total,
+    expect(cashFlow(p, 24, true)).toBeCloseTo(
+      4700 - 3500 + 1500 - housing(p).total,
     );
     const e = evaluate(s);
-    const other = evaluate({ ...s, profile: { ...p, plusBalance: 999999 } });
-    expect(e.dti).toBe(other.dti);
+    const more = evaluate({
+      ...s,
+      profile: { ...p, debtPayment: 600, expenses: 3800 },
+    });
+    expect(more.dti).toBeGreaterThan(e.dti);
   });
   it("converts changes in annual salary to incremental MONTHLY take-home", () => {
     const s = defaults();
     const p = adjustedProfile(s, { salary: 85000 });
-    expect(cashFlow(p, 0) - cashFlow(s.profile, 0)).toBeCloseTo(937.5);
+    expect(cashFlow(p, 0) - cashFlow(s.profile, 0)).toBeCloseTo(780);
   });
   it("handles scheduled raises, growth and benefit deductions transparently", () => {
     const p = defaults().profile;
     expect(
       cashFlow({ ...p, raiseMonth: 6, raiseSalary: 85000 }, 5),
-    ).toBeCloseTo(673);
+    ).toBeCloseTo(1200);
     expect(
       cashFlow({ ...p, raiseMonth: 6, raiseSalary: 85000 }, 6),
-    ).toBeCloseTo(1610.5);
-    expect(cashFlow({ ...p, benefits: 100 }, 0)).toBeCloseTo(573);
+    ).toBeCloseTo(1980);
+    expect(cashFlow({ ...p, benefits: 100 }, 0)).toBeCloseTo(1100);
   });
   it("accumulates savings independently by a geometric series", () => {
-    const p = { ...defaults().profile, loanMonth: 100, savingsRate: 0 };
-    expect(accumulate(p, 12)).toBeCloseTo(5700 + 673 * 12);
+    const p = { ...defaults().profile, savingsRate: 0 };
+    expect(accumulate(p, 12)).toBeCloseTo(20000 + 1200 * 12);
     const r = 0.03 / 12;
     expect(accumulate({ ...p, savingsRate: 3 }, 12)).toBeCloseTo(
-      5700 * (1 + r) ** 12 + (673 * ((1 + r) ** 12 - 1)) / r,
+      20000 * (1 + r) ** 12 + (1200 * ((1 + r) ** 12 - 1)) / r,
       5,
     );
   });
   it("caps contributions without pretending surplus is invested", () => {
     const p = { ...defaults().profile, savingsRate: 0, preContribution: 500 };
-    expect(accumulate(p, 12)).toBe(11700);
+    expect(accumulate(p, 12)).toBe(26000);
   });
   it("withdraws exactly the closing cash on the chart and handles mortgage payoff", () => {
     const p = easy().profile,
@@ -145,11 +161,13 @@ describe("cash flow, inclusion and accumulation", () => {
 });
 describe("inverse thresholds and objectives", () => {
   it("returns null when salary cannot fix a payment ceiling", () => {
-    expect(salaryThreshold(defaults())).toBeNull();
+    const s = defaults();
+    s.profile.paymentLimit = 2000;
+    expect(salaryThreshold(s)).toBeNull();
   });
   it("finds salary to dollar precision and derives comfort from user cushions", () => {
     const s = easy();
-    s.profile.savings = 5700;
+    s.profile.savings = 5000;
     const comfortable = salaryThreshold(s, true)!,
       bare = salaryThreshold(s, false)!;
     expect(comfortable).toBeGreaterThan(bare);
@@ -169,11 +187,14 @@ describe("inverse thresholds and objectives", () => {
   });
   it("solves monthly accumulation required for closing and reserves", () => {
     const p = { ...defaults().profile, savingsRate: 0 };
-    expect(savingsRequired(p)).toBeCloseTo((54000 + 20000 - 5700) / 32);
+    expect(savingsRequired(p)).toBeCloseTo((41000 + 10000 - 20000) / 24);
   });
-  it("net worth excludes the PLUS balance; break-even returns no fabricated horizon", () => {
+  it("net worth subtracts unpaid debt; break-even returns no fabricated horizon", () => {
     const p = easy().profile;
-    expect(wealth(p).wealth).toBe(wealth({ ...p, plusBalance: 999999 }).wealth);
+    expect(
+      wealth(p, 12).wealth -
+        wealth({ ...p, debtBalance: p.debtBalance + 10000 }, 12).wealth,
+    ).toBeCloseTo(10000);
     expect(breakEven({ ...p, appreciation: 0, rent: 0 }, 12)).toBeNull();
   });
   it("recognizes all target constraints", () => {
@@ -265,7 +286,7 @@ describe("safe versioned scenarios", () => {
   });
   it("validates every field and rejects unknown schemas, malformed ranges and excessive imports", () => {
     expect(validateScenario(defaults())).toEqual(defaults());
-    expect(() => validateScenario({ ...defaults(), version: 2 })).toThrow();
+    expect(() => validateScenario({ ...defaults(), version: 3 })).toThrow();
     expect(() =>
       validateScenario({
         ...defaults(),
@@ -287,7 +308,7 @@ describe("safe versioned scenarios", () => {
     expect(decodeShare(goal)?.objective).toBe("price");
     const decoded = atob(goal.split("=")[1]);
     expect(decoded).not.toContain("salary");
-    expect(decoded).not.toContain("7399");
+    expect(decoded).not.toContain("4700");
     expect(decodeShare(encodeShare(s, true))).toEqual(s);
   });
 });
@@ -295,10 +316,8 @@ describe("safe versioned scenarios", () => {
 describe("additional accounting regressions", () => {
   it("holds fixed debt payments nominal while inflating lifestyle expenses", () => {
     const p = defaults().profile;
-    const inflated = { ...p, inflation: 10, loanMonth: 100 };
-    expect(cashFlow(inflated, 12)).toBeCloseTo(
-      7399 - (6726 - 298.67 - 745.88) * 1.1 - 298.67 - 745.88,
-    );
+    const inflated = { ...p, inflation: 10 };
+    expect(cashFlow(inflated, 12)).toBeCloseTo(4700 - (3500 - 300) * 1.1 - 300);
   });
   it("includes retirement deductions in long-term investment assets", () => {
     const p = easy().profile;
@@ -329,7 +348,7 @@ describe("additional accounting regressions", () => {
     expect(
       evaluate({ ...s, profile: { ...s.profile, expenses: 500 } }).violations,
     ).toContain(
-      "The spending baseline is smaller than its included components.",
+      "Total spending is smaller than the rent, flexible spending and debt payments inside it.",
     );
     expect(
       evaluate({ ...s, profile: { ...s.profile, preContribution: 100000 } })
@@ -347,8 +366,48 @@ describe("projection reconciliation", () => {
       expect(wealth(p, h).wealth).toBeCloseTo(chart[h].netWorth, 5);
     }
   });
-  it("stops modeled federal payments when zero-interest principal is repaid", () => {
+  it("stops debt payments when zero-interest principal is repaid", () => {
     const p = defaults().profile;
-    expect(cashFlow(p, 100)).toBeCloseTo(423 + 298.67);
+    expect(cashFlow(p, 49)).toBeCloseTo(1200);
+    expect(cashFlow(p, 50)).toBeCloseTo(1500);
+  });
+  it("migrates version 1 household-loan scenarios to general debt", () => {
+    const v2 = defaults();
+    const p: Record<string, unknown> = { ...v2.profile };
+    for (const k of [
+      "flexible",
+      "flexibleTarget",
+      "debtPayment",
+      "debtBalance",
+      "futureDebtPayment",
+      "futureDebtBalance",
+      "futureDebtMonth",
+    ])
+      delete p[k];
+    Object.assign(p, {
+      dining: 400,
+      diningTarget: 300,
+      medication: 50,
+      ownLoan: 200,
+      ownBalance: 9000,
+      plus: 100,
+      plusBalance: 5000,
+      includesPlus: true,
+      partnerLoan: 150,
+      partnerBalance: 6000,
+      loanMonth: 12,
+      includesFutureLoan: false,
+      filing: "Single",
+      stateTax: 3,
+      localTax: 1,
+    });
+    const m = validateScenario({ ...v2, version: 1, profile: p });
+    expect(m.version).toBe(2);
+    expect(m.profile.debtPayment).toBe(300);
+    expect(m.profile.debtBalance).toBe(14000);
+    expect(m.profile.futureDebtPayment).toBe(150);
+    expect(m.profile.futureDebtMonth).toBe(12);
+    expect(m.profile.flexibleTarget).toBe(300);
+    expect(m.profile.expenses).toBe(v2.profile.expenses);
   });
 });

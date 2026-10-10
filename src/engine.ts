@@ -83,23 +83,39 @@ export function adjustedProfile(
       1200;
   return p;
 }
+// Remaining payment on a zero-interest paydown schedule that starts at `from`.
+function scheduled(payment: number, bal: number, month: number, from = 0) {
+  if (month < from) return 0;
+  return Math.min(payment, Math.max(0, bal - payment * (month - from)));
+}
+export function debtPayments(p: Profile, month: number) {
+  return (
+    scheduled(p.debtPayment, p.debtBalance, month) +
+    scheduled(
+      p.futureDebtPayment,
+      p.futureDebtBalance,
+      month,
+      p.futureDebtMonth,
+    )
+  );
+}
+export function debtOwed(p: Profile, month: number) {
+  return (
+    Math.max(0, p.debtBalance - p.debtPayment * month) +
+    Math.max(
+      0,
+      p.futureDebtBalance -
+        p.futureDebtPayment * Math.max(0, month - p.futureDebtMonth),
+    )
+  );
+}
+// Current debt payments are part of the spending total; future debt is added on its start month.
 export function expenses(p: Profile, month: number) {
-  const din = month >= p.reductionMonth ? p.diningTarget : p.dining;
-  const includedDebt =
-    p.ownLoan +
-    (p.includesPlus ? p.plus : 0) +
-    (p.includesFutureLoan ? p.partnerLoan : 0);
-  const lifestyle = p.expenses - includedDebt + din - p.dining;
+  const flex = month >= p.reductionMonth ? p.flexibleTarget : p.flexible;
+  const lifestyle = p.expenses - p.debtPayment + flex - p.flexible;
   return (
     lifestyle * Math.pow(1 + p.inflation / 100, month / 12) +
-    Math.min(p.ownLoan, Math.max(0, p.ownBalance - p.ownLoan * month)) +
-    p.plus +
-    (month >= p.loanMonth
-      ? Math.min(
-          p.partnerLoan,
-          Math.max(0, p.partnerBalance - p.partnerLoan * (month - p.loanMonth)),
-        )
-      : 0)
+    debtPayments(p, month)
   );
 }
 export function cashFlow(p: Profile, month: number, owned = false) {
@@ -145,12 +161,7 @@ export interface Evaluation {
 export function wealth(p: Profile, horizon = p.horizon) {
   let cash = p.savings,
     inv = 0;
-  const legal =
-    Math.max(0, p.ownBalance - p.ownLoan * horizon) +
-    Math.max(
-      0,
-      p.partnerBalance - p.partnerLoan * Math.max(0, horizon - p.loanMonth),
-    );
+  const legal = debtOwed(p, horizon);
   for (let m = 0; m < horizon; m++) {
     cash *= 1 + p.savingsRate / 1200;
     const flow = cashFlow(p, m, m >= p.months);
@@ -228,31 +239,12 @@ export function evaluate(
         Math.pow(1 + p.growth / 100, p.months / 12)
       : 0);
   const dti =
-    ((h.piti +
-      p.hoa +
-      Math.min(p.ownLoan, Math.max(0, p.ownBalance - p.ownLoan * p.months)) +
-      (p.months >= p.loanMonth
-        ? Math.min(
-            p.partnerLoan,
-            Math.max(
-              0,
-              p.partnerBalance - p.partnerLoan * (p.months - p.loanMonth),
-            ),
-          )
-        : 0)) /
-      (gross / 12)) *
-    100;
+    ((h.piti + p.hoa + debtPayments(p, p.months)) / (gross / 12)) * 100;
   const v: string[] = [];
-  if (
-    p.expenses + 0.01 <
-    p.rent +
-      p.dining +
-      p.medication +
-      p.ownLoan +
-      (p.includesPlus ? p.plus : 0) +
-      (p.includesFutureLoan ? p.partnerLoan : 0)
-  )
-    v.push("The spending baseline is smaller than its included components.");
+  if (p.expenses + 0.01 < p.rent + p.flexible + p.debtPayment)
+    v.push(
+      "Total spending is smaller than the rent, flexible spending and debt payments inside it.",
+    );
   if (p.preContribution > 0 && p.preContribution > cashFlow(p, 0) + 0.01)
     v.push("The pre-purchase contribution limit exceeds available cash flow.");
   if (
@@ -267,7 +259,7 @@ export function evaluate(
   if (h.total > p.paymentLimit + 0.01)
     v.push("Total housing costs exceed your locked payment ceiling.");
   if (dti > p.dtiLimit + 0.001)
-    v.push("Modeled legal-debt DTI exceeds your configured ceiling.");
+    v.push("Debt-to-income ratio exceeds your configured ceiling.");
   if (before < 0) v.push("Current cash flow is negative.");
   let w = 0,
     b: number | null = null;
@@ -362,7 +354,7 @@ function score(s: Scenario, e: Evaluation) {
   const pref: Record<Priority, number> = {
     payment: e.house.total / t.payment,
     reserve: -Math.min(e.remaining, e.reserve + t.reserve) / t.reserve,
-    spending: Math.max(0, b.dining - p.diningTarget) / t.spending,
+    spending: Math.max(0, b.flexible - p.flexibleTarget) / t.spending,
     months: p.months / t.months,
     salary: Math.max(0, p.salary - b.salary) / t.salary,
   };
@@ -425,7 +417,7 @@ function search(s: Scenario, restrict: Lever[] = []): Path | null {
             : []),
         ]),
       ])
-        for (const diningTarget of fixed("spending", 5, b.diningTarget)) {
+        for (const flexibleTarget of fixed("spending", 5, b.flexibleTarget)) {
           if (b.downMode === "dollars" && !s.ranges.down.locked) continue;
           let monthsList = fixed("months", 9, b.months)
             .map(Math.round)
@@ -446,7 +438,7 @@ function search(s: Scenario, restrict: Lever[] = []): Path | null {
           if (s.objective === "date")
             monthsList = monthsList.filter((x) => x <= s.target);
           for (const months of monthsList) {
-            const changes = { price, rate, down: d, diningTarget, months };
+            const changes = { price, rate, down: d, flexibleTarget, months };
             let salary = b.salary;
             const r = s.ranges.salary;
             if (!r.locked && !restrict.includes("salary")) {
@@ -476,12 +468,11 @@ function search(s: Scenario, restrict: Lever[] = []): Path | null {
               const diff: string[] = [];
               if (Math.abs(salary - b.salary) > 1)
                 diff.push(
-                  `Primary salary ${money(salary)} (${money(salary - b.salary)} change)`,
+                  `Salary ${money(salary)} (+${money(salary - b.salary)})`,
                 );
-              if (Math.abs(diningTarget - b.diningTarget) > 1)
-                diff.push(`Dining & snacks ${money(diningTarget)}/mo`);
-              if (months !== b.months)
-                diff.push(`Purchase in ${months} months`);
+              if (Math.abs(flexibleTarget - b.flexibleTarget) > 1)
+                diff.push(`Flexible spending ${money(flexibleTarget)}/mo`);
+              if (months !== b.months) diff.push(`Buy in ${months} months`);
               if (Math.abs(d - b.down) > 0.1)
                 diff.push(`Down payment ${d.toFixed(1)}%`);
               if (Math.abs(price - b.price) > 1)
@@ -494,7 +485,7 @@ function search(s: Scenario, restrict: Lever[] = []): Path | null {
                 score: sc,
                 changes: diff.length
                   ? diff
-                  : ["Your existing assumptions already meet the objective."],
+                  : ["Your plan already reaches this goal as entered."],
               };
             }
           }
@@ -503,11 +494,14 @@ function search(s: Scenario, restrict: Lever[] = []): Path | null {
 }
 export function optimize(s: Scenario) {
   const configurations: { name: string; restrict: Lever[] }[] = [
-    { name: "Priority-led path", restrict: [] },
-    { name: "Income path", restrict: ["spending", "down", "months"] },
-    { name: "Lifestyle path", restrict: ["salary", "spending", "down"] },
-    { name: "Savings path", restrict: ["salary", "down"] },
-    { name: "Housing path", restrict: ["spending", "months"] },
+    { name: "Best fit for your priorities", restrict: [] },
+    { name: "Earn more", restrict: ["spending", "down", "months"] },
+    { name: "Wait longer", restrict: ["salary", "spending", "down"] },
+    { name: "Spend less and wait", restrict: ["salary", "down"] },
+    {
+      name: "Change the home or down payment",
+      restrict: ["spending", "months"],
+    },
   ];
   const paths: Path[] = [];
   for (const c of configurations) {
@@ -526,7 +520,7 @@ export function optimize(s: Scenario) {
     paths,
     baseline: evaluate(s, s.profile, true),
     method:
-      "Bounded grid search with salary bisection; feasible candidates ranked lexicographically within your tolerances. Results are sampled planning paths, not proof of a global optimum.",
+      "Each path comes from a bounded grid search, with salary solved by bisection. Paths that pass every limit are ranked by your priorities. These are sampled options, not a guaranteed best answer.",
   };
 }
 export function salaryThreshold(s: Scenario, comfortable = true) {
@@ -593,7 +587,7 @@ export function projection(
       equity: 0,
       flow: cashFlow(p, 0),
       closing: false,
-      netWorth: cash - p.ownBalance - p.partnerBalance,
+      netWorth: cash - debtOwed(p, 0),
     },
   ];
   for (let m = 1; m <= horizon; m++) {
@@ -614,12 +608,7 @@ export function projection(
       inv * (1 + p.investmentReturn / 1200) +
       p.investment +
       (gross * p.retirement) / 1200;
-    const legal =
-      Math.max(0, p.ownBalance - p.ownLoan * m) +
-      Math.max(
-        0,
-        p.partnerBalance - p.partnerLoan * Math.max(0, m - p.loanMonth),
-      );
+    const legal = debtOwed(p, m);
     const h = owned || m === p.months ? housing(p, m - p.months) : null;
     points.push({
       month: m,

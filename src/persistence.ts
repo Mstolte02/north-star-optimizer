@@ -6,6 +6,7 @@ import {
   type Priority,
 } from "./model";
 export const STORAGE = "north-star.scenarios.v1";
+export const STARTING_PLAN = "north-star.starting-plan.v1";
 const numericBounds: Record<string, [number, number]> = {
   salary: [0, 10000000],
   partnerSalary: [0, 10000000],
@@ -13,10 +14,8 @@ const numericBounds: Record<string, [number, number]> = {
   retention: [1, 100],
   growth: [0, 30],
   retirement: [0, 60],
-  stateTax: [0, 30],
-  localTax: [0, 30],
   raiseMonth: [0, 360],
-  loanMonth: [0, 360],
+  futureDebtMonth: [0, 360],
   reductionMonth: [0, 360],
   price: [1, 10000000],
   down: [0, 100],
@@ -35,13 +34,50 @@ const numericBounds: Record<string, [number, number]> = {
   tax: [0, 10],
   maintenance: [0, 10],
 };
+// Version 1 used named household loans. Fold them into the general debt fields.
+function migrateV1(x: Record<string, unknown>) {
+  const p = { ...(x.profile as Record<string, unknown>) };
+  const n = (k: string) => (typeof p[k] === "number" ? (p[k] as number) : 0);
+  const plus = n("plus");
+  p.expenses = n("expenses") + (p.includesPlus === false ? plus : 0);
+  p.debtPayment = n("ownLoan") + plus;
+  p.debtBalance = n("ownBalance") + n("plusBalance");
+  p.futureDebtPayment = n("partnerLoan");
+  p.futureDebtBalance = n("partnerBalance");
+  p.futureDebtMonth = n("loanMonth");
+  if (p.includesFutureLoan === true)
+    p.expenses = n("expenses") - n("partnerLoan");
+  p.flexible = n("dining");
+  p.flexibleTarget = n("diningTarget");
+  for (const k of [
+    "ownLoan",
+    "ownBalance",
+    "plus",
+    "plusBalance",
+    "partnerLoan",
+    "partnerBalance",
+    "loanMonth",
+    "dining",
+    "diningTarget",
+    "medication",
+    "includesPlus",
+    "includesFutureLoan",
+    "filing",
+    "stateTax",
+    "localTax",
+  ])
+    delete p[k];
+  return { ...x, version: 2, profile: p };
+}
 export function validateScenario(value: unknown): Scenario {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Scenario must be an object.");
-  const x = value as Record<string, unknown>,
-    base = defaults();
-  if (x.version !== 1)
-    throw new Error("Unsupported schema version. Expected version 1.");
+  let x = value as Record<string, unknown>;
+  const base = defaults();
+  if (x.version === 1 && x.profile && typeof x.profile === "object")
+    x = migrateV1(x);
+  if (x.version !== 2)
+    throw new Error("Unsupported schema version. Expected version 2.");
   if (typeof x.name !== "string" || x.name.length < 1 || x.name.length > 100)
     throw new Error("Provide a scenario name of 1–100 characters.");
   if (
@@ -100,7 +136,7 @@ export function validateScenario(value: unknown): Scenario {
         "months",
         "horizon",
         "raiseMonth",
-        "loanMonth",
+        "futureDebtMonth",
         "reductionMonth",
       ].includes(k) &&
       !Number.isInteger(candidate)
@@ -194,7 +230,7 @@ export function saveScenarios(
 export function encodeShare(s: Scenario, includeFinancials = false) {
   const payload = includeFinancials
     ? s
-    : { version: 1, objective: s.objective, target: s.target, mode: s.mode };
+    : { version: 2, objective: s.objective, target: s.target, mode: s.mode };
   return (
     "#" +
     (includeFinancials ? "scenario=" : "goal=") +

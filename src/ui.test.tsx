@@ -37,7 +37,7 @@ describe("accessible application interactions", () => {
   it("renders valid landmarks, labeled controls and no serious automated accessibility issues", async () => {
     render(<App />);
     await waitFor(() =>
-      expect(screen.getByText("Within constraints")).toBeTruthy(),
+      expect(screen.getByText("Within your limits")).toBeTruthy(),
     );
     const result = await axe.run(document.body, {
       rules: { "color-contrast": { enabled: false } },
@@ -48,11 +48,11 @@ describe("accessible application interactions", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Priorities" }));
     const up = screen.getByRole("button", {
-      name: "Move Preserve lifestyle spending up",
+      name: "Move Keep my flexible spending up",
     });
     fireEvent.click(up);
     const items = screen.getAllByRole("listitem");
-    expect(items[1].textContent).toContain("Preserve lifestyle");
+    expect(items[1].textContent).toContain("Keep my flexible spending");
     const button = screen.getByRole("button", {
       name: "Home price",
       pressed: true,
@@ -64,12 +64,10 @@ describe("accessible application interactions", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Save this scenario" }));
     fireEvent.click(screen.getByRole("button", { name: /Scenarios/ }));
-    expect(
-      screen.getByRole("heading", { name: "Our first home" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "My first home" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Duplicate" }));
     expect(
-      screen.getByRole("heading", { name: "Our first home copy" }),
+      screen.getByRole("heading", { name: "My first home copy" }),
     ).toBeTruthy();
     expect(
       JSON.parse(localStorage.getItem("north-star.scenarios.v1")!).length,
@@ -77,24 +75,24 @@ describe("accessible application interactions", () => {
   });
   it("switches North Stars and exposes appropriate target controls", () => {
     render(<App />);
-    fireEvent.change(screen.getByLabelText(/MY NORTH STAR/), {
+    fireEvent.change(screen.getByLabelText("Your goal"), {
       target: { value: "date" },
     });
     expect(screen.getByLabelText("Target purchase date")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText(/MY NORTH STAR/), {
+    fireEvent.change(screen.getByLabelText("Your goal"), {
       target: { value: "salary" },
     });
     expect(screen.getByText("Solve for the minimum")).toBeTruthy();
   });
-  it("updates included loan components by the difference instead of double-counting", () => {
+  it("updates parts of total spending by the difference instead of double-counting", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "Assumptions" }));
-    const input = screen.getByLabelText(/Primary federal payment \(included\)/);
+    const input = screen.getByLabelText(/Debt payments \(part of total\)/);
     fireEvent.change(input, { target: { value: "400" } });
     const baseline = screen.getByLabelText(
-      /Current total spending baseline/,
+      /^Total monthly spending/,
     ) as HTMLInputElement;
-    expect(Number(baseline.value)).toBeCloseTo(6726 + 101.33);
+    expect(Number(baseline.value)).toBeCloseTo(3500 + 100);
   });
 });
 
@@ -105,32 +103,41 @@ describe("guided setup and focused pages", () => {
     expect(
       screen.getByRole("heading", { name: "What comes in?" }),
     ).toBeTruthy();
-    expect(screen.queryByText("Your priorities.")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Household monthly take-home"), {
-      target: { value: "8000" },
-    });
+    expect(screen.queryByText("What matters most")).toBeNull();
+    fireEvent.change(
+      screen.getByLabelText("Household take-home pay per month"),
+      {
+        target: { value: "8000" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(
       screen.getByRole("heading", { name: "What goes out?" }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(
-      (screen.getByLabelText("Household monthly take-home") as HTMLInputElement)
-        .value,
+      (
+        screen.getByLabelText(
+          "Household take-home pay per month",
+        ) as HTMLInputElement
+      ).value,
     ).toBe("8000");
   });
   it("completes setup, remembers it on reload, and separates planner pages", async () => {
     localStorage.removeItem("north-star.starting-plan.v1");
     const view = render(<App />);
-    fireEvent.change(screen.getByLabelText("Household monthly take-home"), {
-      target: { value: "8000" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Household take-home pay per month"),
+      {
+        target: { value: "8000" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.change(screen.getByLabelText("Total monthly spending"), {
       target: { value: "6000" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    fireEvent.change(screen.getByLabelText("Current savings"), {
+    fireEvent.change(screen.getByLabelText("Savings today"), {
       target: { value: "15000" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -138,8 +145,8 @@ describe("guided setup and focused pages", () => {
       target: { value: "350000" },
     });
     fireEvent.click(screen.getByRole("button", { name: "See my plan" }));
-    expect(screen.getByLabelText(/MY NORTH STAR/)).toBeTruthy();
-    expect(screen.queryByText("Your priorities.")).toBeNull();
+    expect(screen.getByLabelText("Your goal")).toBeTruthy();
+    expect(screen.queryByText("What matters most")).toBeNull();
     expect(screen.queryByText("What has to be true?")).toBeNull();
     const stored = JSON.parse(
       localStorage.getItem("north-star.starting-plan.v1")!,
@@ -149,8 +156,8 @@ describe("guided setup and focused pages", () => {
     expect(stored.profile.savings).toBe(15000);
     expect(stored.target).toBe(350000);
     fireEvent.click(screen.getByRole("button", { name: "Priorities" }));
-    expect(screen.getByText("Your priorities.")).toBeTruthy();
-    expect(screen.queryByLabelText(/MY NORTH STAR/)).toBeNull();
+    expect(screen.getByText("What matters most")).toBeTruthy();
+    expect(screen.queryByLabelText("Your goal")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Explore" }));
     expect(screen.getByText("What has to be true?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Assumptions" }));
@@ -159,12 +166,12 @@ describe("guided setup and focused pages", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
     expect(
-      screen.getByRole("heading", { name: "Your financial assumptions." }),
+      screen.getByRole("heading", { name: "Your assumptions" }),
     ).toBeTruthy();
     view.unmount();
     render(<App />);
     expect(
-      (screen.getByLabelText("North Star target") as HTMLInputElement).value,
+      (screen.getByLabelText("Goal target") as HTMLInputElement).value,
     ).toBe("350000");
   });
   it("rejects rent above total spending without advancing", () => {

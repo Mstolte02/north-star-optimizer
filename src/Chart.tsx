@@ -57,12 +57,12 @@ export function Chart({
     <div className="trajectory">
       <div className="chart-heading">
         <div>
-          <span className="eyebrow">PATH TO YOUR NORTH STAR</span>
           <h2>
             {objective === "wealth"
-              ? "A longer view of your future."
-              : "From today to your front door."}
+              ? "Your long-term picture"
+              : "From today to your front door"}
           </h2>
+          <p>Hover the chart or use the slider to see any month.</p>
         </div>
         <div className="segmented" role="group" aria-label="Chart series">
           {(["cash", "equity", "balance", "netWorth"] as const).map((k) => (
@@ -72,7 +72,7 @@ export function Chart({
               onClick={() => setSeries(k)}
             >
               {k === "cash"
-                ? "Cash savings"
+                ? "Cash"
                 : k === "equity"
                   ? "Home equity"
                   : k === "netWorth"
@@ -83,9 +83,9 @@ export function Chart({
         </div>
       </div>
       <div className="chart-summary" aria-live="polite">
-        <span>{monthLabel(p, selectedPoint.month)}</span>
         <strong>{money(selectedPoint[series])}</strong>
-        <span>
+        <span>{monthLabel(p, selectedPoint.month)}</span>
+        <span className="chip">
           {selectedPoint.closing
             ? "Immediately after closing"
             : selectedPoint.month > p.months
@@ -118,8 +118,8 @@ export function Chart({
       >
         <defs>
           <linearGradient id="fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0" stopColor="#A8BFAF" stopOpacity=".45" />
-            <stop offset="1" stopColor="#A8BFAF" stopOpacity="0" />
+            <stop offset="0" className="fill-top" />
+            <stop offset="1" className="fill-bottom" />
           </linearGradient>
         </defs>
         {[0, 0.5, 1].map((t) => (
@@ -129,8 +129,7 @@ export function Chart({
               x2={width - pad}
               y1={y(min + (max - min) * t)}
               y2={y(min + (max - min) * t)}
-              stroke="#15232B"
-              opacity=".08"
+              className="grid-line"
             />
             <text x={pad} y={y(min + (max - min) * t) - 7} className="axis">
               {money(min + (max - min) * t)}
@@ -144,8 +143,7 @@ export function Chart({
               x2={width - pad}
               y1={y(protectedReserve)}
               y2={y(protectedReserve)}
-              stroke="#C48758"
-              strokeDasharray="4 5"
+              className="floor-line"
             />
             <text
               x={width - pad}
@@ -153,7 +151,7 @@ export function Chart({
               textAnchor="end"
               className="axis"
             >
-              Protected cash floor
+              Cash you keep
             </text>
           </>
         )}
@@ -161,51 +159,41 @@ export function Chart({
           d={`${path} L${x(points.length - 1)},${y(min)} L${pad},${y(min)} Z`}
           fill="url(#fill)"
         />
-        <path
-          d={path}
-          fill="none"
-          stroke={series === "balance" ? "#15232B" : "#2C6E68"}
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
+        <path d={path} fill="none" className="series-line" />
         <line
           x1={x(p.months)}
           x2={x(p.months)}
           y1={pad}
           y2={height - pad}
-          stroke="#C48758"
-          strokeDasharray="3 4"
+          className="closing-line"
         />
         <circle
           cx={x(p.months)}
           cy={y(points[p.months]?.[series] ?? 0)}
           r="5"
-          fill="#C48758"
+          className="closing-dot"
         />
         <line
           x1={x(selectedPoint.month)}
           x2={x(selectedPoint.month)}
           y1={pad}
           y2={height - pad}
-          stroke="#15232B"
-          opacity=".2"
+          className="cursor-line"
         />
         <circle
           cx={x(selectedPoint.month)}
           cy={y(selectedPoint[series])}
           r="5"
-          fill="#2C6E68"
-          stroke="#F7F4ED"
-          strokeWidth="2"
+          className="cursor-dot"
         />
       </svg>
       <div className="chart-dates">
         <span>{monthLabel(p, 0)}</span>
-        <span className="copper">Closing · {monthLabel(p, p.months)}</span>
+        <span className="accent">You buy · {monthLabel(p, p.months)}</span>
         <span>{monthLabel(p, points.length - 1)}</span>
       </div>
       <label className="scrubber">
-        Inspect month{" "}
+        <span>Inspect month</span>
         <input
           type="range"
           min="0"
@@ -215,10 +203,9 @@ export function Chart({
         />
       </label>
       <p className="chart-note">
-        The dip is your down payment, closing costs and moving expenses. Cash
-        projections use available monthly cash flow, capped by optional
-        contribution limits. Mortgage and equity use the same purchase
-        assumptions.
+        The drop at purchase is your down payment, closing costs and moving
+        costs. Cash grows by whatever is left over each month, up to any saving
+        limit you set.
       </p>
     </div>
   );
