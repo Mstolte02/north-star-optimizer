@@ -1,5 +1,11 @@
 # Release notes
 
+## 2.3 — wizard first (2026-10-09)
+
+- The app opens on the setup wizard alone: no landing page, menus or answer until the questions are done.
+- The wizard now has seven steps: question, income, spending (including flexible spending), savings, home, what matters most (tap to rank), and what you are willing to change.
+- Returning visitors also start in the wizard with their answers filled in and a Skip to my plan link.
+
 ## 2.2 — plan wizard (2026-10-09)
 
 - Results is now a four-step wizard: Your answer, Pick a path, Fine-tune, Your plan.

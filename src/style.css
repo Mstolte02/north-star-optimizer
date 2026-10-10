@@ -2077,6 +2077,155 @@ button.on-dark:hover {
   }
 }
 
+/* Wizard */
+.page-setup {
+  min-height: 100vh;
+  justify-content: center;
+  padding-top: clamp(16px, 6vh, 64px);
+}
+.wizard {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: clamp(22px, 4vw, 40px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 6px);
+  box-shadow:
+    0 2px 4px rgba(15, 23, 41, 0.04),
+    0 16px 48px rgba(15, 23, 41, 0.08);
+}
+.wizard-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wizard-top .step-count {
+  flex: 1;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.wizard-top .link {
+  font-size: 0.86rem;
+}
+.wizard-bar {
+  list-style: none;
+  margin: 6px 0 12px;
+  padding: 0;
+  display: flex;
+  gap: 4px;
+}
+.wizard-bar li {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.wizard-bar li.done {
+  background: var(--accent);
+}
+.wizard-bar li[aria-current="step"] {
+  background: var(--gold);
+}
+.wizard h1 {
+  outline: none;
+}
+.wizard .setup-intro {
+  color: var(--ink-2);
+  margin-bottom: 10px;
+}
+.wizard form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.wizard .fields {
+  display: grid;
+  gap: 16px;
+}
+.wizard .question-cards {
+  margin-top: 4px;
+}
+.wizard .setup-actions {
+  margin-top: 8px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.rank-list button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 56px;
+  padding: 0 16px;
+  text-align: left;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-weight: 500;
+}
+.rank-list button:hover {
+  border-color: var(--accent);
+}
+.rank-list .rank {
+  background: var(--surface-2);
+  border: 1.5px dashed var(--line-strong);
+}
+.rank-list button.is-ranked {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.rank-list button.is-ranked .rank {
+  background: var(--accent);
+  border: 0;
+  color: var(--accent-ink);
+}
+.option-list {
+  display: grid;
+  gap: 8px;
+}
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.option input {
+  flex: none;
+  margin-top: 2px;
+}
+.option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.option small {
+  color: var(--ink-3);
+  font-size: 0.84rem;
+}
+
 /* Responsive */
 @media (max-width: 960px) {
   .goal-panel,

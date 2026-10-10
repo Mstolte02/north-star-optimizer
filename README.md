@@ -11,7 +11,7 @@ Live site: https://mstolte02.github.io/north-star-optimizer/
 ## How it works
 
 1. **Pick a question** — When can I buy a home? How much home can I afford? Can I buy by a certain date? What income do I need?
-2. **Four short steps** — income, spending, savings and the home. Example numbers are filled in; replace them with yours.
+2. **A short wizard** — income, spending, savings and the home, then what matters most (tap to rank) and what you are willing to change. Nothing else is on screen until it is done.
 3. **Get a straight answer** — one sentence, such as "You can buy a $300,000 home in Dec 2030", with the monthly cost and the cash left after closing.
 4. **See ways to get there** — two to four options that pass all your limits (earn a bit more, spend less, change the down payment). Choose one to make it your plan.
 5. **Fine-tune** — sliders for salary, flexible spending, price, timing and down payment show a live preview; Apply changes updates the plan and chart.
@@ -55,7 +55,7 @@ The dev URL includes `/north-star-optimizer/`, matching the GitHub Pages base pa
 - `src/optimizer.worker.ts` — runs the optimizer off the main thread
 - `src/persistence.ts` — validation, browser storage, JSON import/export, share links, and migration of version 1 scenarios
 - `src/App.tsx` — routing and the Advanced pages
-- `src/Landing.tsx`, `src/Results.tsx` — first page and the answer page
+- `src/Results.tsx` — the answer, path, fine-tune and plan steps
 - `src/verdict.ts` — the one-sentence answer for each question
 - `src/SetupWizard.tsx` — first-run setup
 - `src/Chart.tsx` — interactive projection chart

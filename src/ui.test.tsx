@@ -43,8 +43,12 @@ const noAxeViolations = async () => {
 const verdictText = () => screen.getByRole("heading", { level: 1 }).textContent;
 const advanced = () =>
   fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+// Returning visitors start in the wizard too; skip straight to the plan.
+const open = () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Skip to my plan" }));
+};
 const begin = (card = "When can I buy a home?") => {
-  fireEvent.click(screen.getByRole("button", { name: /Get started/ }));
   fireEvent.click(
     screen.getAllByRole("button").find((b) => b.textContent?.startsWith(card))!,
   );
@@ -60,13 +64,13 @@ const nextFromAnswer = () =>
 
 describe("plan journey", () => {
   it("answers the question in one sentence with no accessibility issues", async () => {
-    render(<App />);
+    open();
     expect(screen.getByRole("list", { name: "Plan progress" })).toBeTruthy();
     expect(verdictText()).toContain("You can buy a $300,000 home in");
     await noAxeViolations();
   }, 15000);
   it("applies a chosen path when moving on", async () => {
-    render(<App />);
+    open();
     nextFromAnswer();
     expect(verdictText()).toBe("Pick a way to get there");
     await pathsReady();
@@ -82,7 +86,7 @@ describe("plan journey", () => {
     expect(verdictText()).toBe("Fine-tune your plan");
   });
   it("keeps slider moves as a preview until they are applied", async () => {
-    render(<App />);
+    open();
     nextFromAnswer();
     await pathsReady();
     fireEvent.click(screen.getByRole("button", { name: /Next: fine-tune/ }));
@@ -100,11 +104,11 @@ describe("plan journey", () => {
     expect((apply as HTMLButtonElement).disabled).toBe(true);
     const applied = screen.getByText(/^You can buy/).textContent;
     cleanup();
-    render(<App />);
+    open();
     expect(verdictText()).toBe(applied);
   });
   it("ends on a personal action plan that can be saved", async () => {
-    render(<App />);
+    open();
     nextFromAnswer();
     await pathsReady();
     fireEvent.click(screen.getByRole("button", { name: /Next: fine-tune/ }));
@@ -124,7 +128,7 @@ describe("plan journey", () => {
     ).toBe(1);
   }, 15000);
   it("switches questions in place", () => {
-    render(<App />);
+    open();
     fireEvent.click(
       screen.getByRole("button", { name: "What income do I need?" }),
     );
@@ -142,7 +146,7 @@ describe("plan journey", () => {
 
 describe("advanced pages", () => {
   it("reorders priorities using accessible buttons and toggles locks", () => {
-    render(<App />);
+    open();
     advanced();
     fireEvent.click(screen.getByRole("button", { name: "Priorities" }));
     fireEvent.click(
@@ -158,7 +162,7 @@ describe("advanced pages", () => {
     expect(button.getAttribute("aria-pressed")).toBe("false");
   });
   it("supports saving, opening and duplicating a scenario", () => {
-    render(<App />);
+    open();
     fireEvent.click(screen.getByRole("button", { name: /Saved/ }));
     fireEvent.click(screen.getByRole("button", { name: /Save current plan/ }));
     expect(screen.getByRole("heading", { name: "My first home" })).toBeTruthy();
@@ -171,7 +175,7 @@ describe("advanced pages", () => {
     ).toBe(2);
   });
   it("offers every goal with the right target control", () => {
-    render(<App />);
+    open();
     advanced();
     fireEvent.change(screen.getByLabelText("Your goal"), {
       target: { value: "date" },
@@ -183,7 +187,7 @@ describe("advanced pages", () => {
     expect(screen.getByText("Solve for the minimum")).toBeTruthy();
   });
   it("updates parts of total spending by the difference instead of double-counting", () => {
-    render(<App />);
+    open();
     advanced();
     fireEvent.click(screen.getByRole("button", { name: "Assumptions" }));
     fireEvent.change(screen.getByLabelText(/Debt payments \(part of total\)/), {
@@ -197,19 +201,27 @@ describe("advanced pages", () => {
 });
 
 describe("guided setup", () => {
-  it("starts on a landing page, then asks the question first", async () => {
+  it("opens on the wizard alone, with no answer or menus on screen", async () => {
     localStorage.removeItem("north-star.starting-plan.v1");
     render(<App />);
-    expect(
-      screen.getByRole("heading", { name: /Find out when you can buy/ }),
-    ).toBeTruthy();
-    await noAxeViolations();
-    fireEvent.click(screen.getByRole("button", { name: /Get started/ }));
     expect(
       screen.getByRole("heading", { name: "What do you want to know?" }),
     ).toBeTruthy();
     expect(screen.getByRole("list", { name: "Setup progress" })).toBeTruthy();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.queryByText(/You can buy/)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Skip to my plan" }),
+    ).toBeNull();
     await noAxeViolations();
+  });
+  it("starts returning visitors in the wizard with a way to skip", () => {
+    render(<App />);
+    expect(
+      screen.getByRole("heading", { name: "What do you want to know?" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Skip to my plan" }));
+    expect(verdictText()).toContain("You can buy");
   });
   it("shows one step at a time and keeps edited numbers going back", () => {
     localStorage.removeItem("north-star.starting-plan.v1");
@@ -259,7 +271,19 @@ describe("guided setup", () => {
     fireEvent.change(screen.getByLabelText("Target home price"), {
       target: { value: "350000" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "See my answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(
+      screen.getByRole("heading", { name: "What matters most to you?" }),
+    ).toBeTruthy();
+    const sooner = screen.getByRole("button", { name: /Buy sooner/ });
+    fireEvent.click(sooner);
+    expect(sooner.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(
+      screen.getByRole("heading", { name: "What are you willing to change?" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(/Wait longer/));
+    fireEvent.click(screen.getByRole("button", { name: /See my answer/ }));
     expect(verdictText()).toContain("$350,000");
     const stored = JSON.parse(
       localStorage.getItem("north-star.starting-plan.v1")!,
@@ -268,6 +292,8 @@ describe("guided setup", () => {
     expect(stored.profile.expenses).toBe(6000);
     expect(stored.profile.savings).toBe(15000);
     expect(stored.target).toBe(350000);
+    expect(stored.priorities[0]).toBe("months");
+    expect(stored.ranges.months.locked).toBe(true);
     advanced();
     fireEvent.click(screen.getByRole("button", { name: "Priorities" }));
     expect(screen.getByText("What matters most")).toBeTruthy();
@@ -277,10 +303,10 @@ describe("guided setup", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Edit starting numbers" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Cancel setup" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip to my plan" }));
     expect(verdictText()).toContain("$350,000");
     view.unmount();
-    render(<App />);
+    open();
     advanced();
     expect(
       (screen.getByLabelText("Goal target") as HTMLInputElement).value,
@@ -312,7 +338,10 @@ describe("guided setup", () => {
     expect(
       screen.getByLabelText("Months from now you want to buy"),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "See my answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.queryByLabelText(/Look at a different price/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /See my answer/ }));
     expect(verdictText()).toMatch(/You can afford about|No home price/);
   });
 });

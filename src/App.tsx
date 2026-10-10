@@ -35,7 +35,6 @@ import {
 } from "./persistence";
 import { SetupWizard } from "./SetupWizard";
 import { Icon, type IconName } from "./Icon";
-import { Landing } from "./Landing";
 import { Results } from "./Results";
 import type { Path } from "./engine";
 
@@ -301,7 +300,6 @@ const wholeMonths = [
   "reductionMonth",
 ];
 type Tab =
-  | "landing"
   | "setup"
   | "results"
   | "plan"
@@ -363,7 +361,7 @@ function PageHead({
 export default function App() {
   const [init] = useState(initial),
     [s, setS] = useState<Scenario>(init.s),
-    [tab, setTab] = useState<Tab>(init.ready ? "results" : "landing"),
+    [tab, setTab] = useState<Tab>("setup"),
     [setupComplete, setSetupComplete] = useState(init.ready),
     [saved, setSaved] = useState<Scenario[]>([]),
     [message, setMessage] = useState(init.error),
@@ -373,6 +371,7 @@ export default function App() {
     [shareFull, setShareFull] = useState(false),
     [compare, setCompare] = useState<string[]>([]),
     [journey, setJourney] = useState(0),
+    [wizardKey, setWizardKey] = useState(0),
     [start, setStart] = useState(init.start);
   const file = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -565,6 +564,8 @@ export default function App() {
       ? { text: "Within your limits", tone: "good" }
       : { text: "Changes needed", tone: "warn" };
   const go = (t: Tab) => {
+    // Each visit to setup starts the wizard again from the first question.
+    if (t === "setup") setWizardKey((k) => k + 1);
     setTab(t);
     window.scrollTo?.(0, 0);
   };
@@ -589,45 +590,47 @@ export default function App() {
   );
   return (
     <div className="app">
-      <header className="topbar">
-        <a
-          className="brand"
-          href="#"
-          onClick={(ev) => {
-            ev.preventDefault();
-            go(setupComplete ? "results" : "landing");
-          }}
-        >
-          <span className="brand-mark" aria-hidden="true">
-            <Icon name="star" />
+      {tab !== "setup" && (
+        <header className="topbar">
+          <a
+            className="brand"
+            href="#"
+            onClick={(ev) => {
+              ev.preventDefault();
+              go(setupComplete ? "results" : "setup");
+            }}
+          >
+            <span className="brand-mark" aria-hidden="true">
+              <Icon name="star" />
+            </span>
+            <span className="brand-name">North Star</span>
+          </a>
+          {
+            <nav aria-label="Main navigation" className="tabs">
+              {nav.map((n) => {
+                const on = n.key === "plan" ? isAdvanced(tab) : tab === n.key;
+                return (
+                  <button
+                    key={n.key}
+                    aria-current={on ? "page" : undefined}
+                    className={on ? "active" : ""}
+                    onClick={() => go(n.key)}
+                  >
+                    <Icon name={n.icon} />
+                    <span>{n.label}</span>
+                    {n.key === "scenarios" && saved.length > 0 && (
+                      <span className="count">{saved.length}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          }
+          <span className="topbar-note">
+            Runs in your browser · nothing is uploaded
           </span>
-          <span className="brand-name">North Star</span>
-        </a>
-        {tab !== "setup" && tab !== "landing" && (
-          <nav aria-label="Main navigation" className="tabs">
-            {nav.map((n) => {
-              const on = n.key === "plan" ? isAdvanced(tab) : tab === n.key;
-              return (
-                <button
-                  key={n.key}
-                  aria-current={on ? "page" : undefined}
-                  className={on ? "active" : ""}
-                  onClick={() => go(n.key)}
-                >
-                  <Icon name={n.icon} />
-                  <span>{n.label}</span>
-                  {n.key === "scenarios" && saved.length > 0 && (
-                    <span className="count">{saved.length}</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        )}
-        <span className="topbar-note">
-          Runs in your browser · nothing is uploaded
-        </span>
-      </header>
+        </header>
+      )}
       <main tabIndex={-1} className={`page page-${tab}`}>
         {message && (
           <div className="toast" role="status">
@@ -640,12 +643,6 @@ export default function App() {
               <Icon name="x" />
             </button>
           </div>
-        )}
-        {tab === "landing" && (
-          <Landing
-            onStart={() => go("setup")}
-            onSaved={saved.length ? () => go("scenarios") : undefined}
-          />
         )}
         {isAdvanced(tab) && (
           <nav className="subtabs" aria-label="Advanced settings">
@@ -679,17 +676,10 @@ export default function App() {
         )}
         {tab === "setup" && (
           <>
-            {saved.length > 0 && (
-              <button
-                className="ghost setup-saved"
-                onClick={() => go("scenarios")}
-              >
-                Open saved scenarios
-              </button>
-            )}
             <SetupWizard
+              key={wizardKey}
               scenario={s}
-              onCancel={setupComplete ? () => go("results") : undefined}
+              onSkip={setupComplete ? () => go("results") : undefined}
               onComplete={(plan) => {
                 setS(plan);
                 setStart(plan.profile);
@@ -1773,15 +1763,17 @@ export default function App() {
           </>
         )}
       </main>
-      <footer className="footer">
-        <span>
-          <Icon name="star" /> North Star
-        </span>
-        <span>A planning tool, not financial advice.</span>
-        <button className="link" onClick={() => go("method")}>
-          How the math works
-        </button>
-      </footer>
+      {tab !== "setup" && (
+        <footer className="footer">
+          <span>
+            <Icon name="star" /> North Star
+          </span>
+          <span>A planning tool, not financial advice.</span>
+          <button className="link" onClick={() => go("method")}>
+            How the math works
+          </button>
+        </footer>
+      )}
     </div>
   );
 }

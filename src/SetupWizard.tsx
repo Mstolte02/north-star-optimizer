@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
   applyQuestion,
+  priorityLabels,
   questionFor,
   questions,
+  type Lever,
+  type Priority,
   type Profile,
   type Question,
   type Scenario,
@@ -21,7 +24,7 @@ type Step = {
     string?,
   ])[];
 };
-const steps: Step[] = [
+const money: Step[] = [
   {
     name: "Income",
     title: "What comes in?",
@@ -54,6 +57,13 @@ const steps: Step[] = [
       ],
       ["rent", "Rent (part of the total)", 0, 10000000],
       [
+        "flexible",
+        "Flexible spending (part of the total)",
+        0,
+        10000000,
+        "Dining out, shopping, fun — the part you could cut.",
+      ],
+      [
         "debtPayment",
         "Debt payments (part of the total)",
         0,
@@ -81,10 +91,9 @@ const steps: Step[] = [
     ],
   },
   {
-    name: "Home goal",
-    title: "Where are you headed?",
-    intro:
-      "Describe the home you want. These are estimates; you can change them on the results page.",
+    name: "Home",
+    title: "What home are you after?",
+    intro: "Rough numbers are fine. You can change them later.",
     fields: [
       ["price", "Target home price", 1, 10000000],
       ["down", "Down payment (%)", 0, 100],
@@ -108,198 +117,318 @@ const homeFields: Record<Question, (keyof Profile)[]> = {
   deadline: ["price", "down", "rate", "months", "paymentLimit"],
   income: ["price", "down", "rate", "months", "paymentLimit"],
 };
-const names = ["Question", ...steps.map((x) => x.name)];
+const flexOptions: { lever: Lever; label: string; text: string }[] = [
+  {
+    lever: "salary",
+    label: "Earn more",
+    text: "A raise, a new job or a second income.",
+  },
+  {
+    lever: "spending",
+    label: "Cut back on flexible spending",
+    text: "Less dining out, shopping and fun for a while.",
+  },
+  { lever: "months", label: "Wait longer", text: "Buy later than you hoped." },
+  {
+    lever: "down",
+    label: "Change my down payment",
+    text: "Put more or less down than planned.",
+  },
+  {
+    lever: "price",
+    label: "Look at a different price",
+    text: "Consider a cheaper or more expensive home.",
+  },
+];
+// Step order: question, four money steps, priorities, flexibility.
+const names = [
+  "Question",
+  ...money.map((x) => x.name),
+  "Priorities",
+  "Options",
+];
+const PRIORITIES = names.length - 2;
+const OPTIONS = names.length - 1;
+
 export function SetupWizard({
   scenario,
   onComplete,
-  onCancel,
+  onSkip,
 }: {
   scenario: Scenario;
   onComplete: (s: Scenario) => void;
-  onCancel?: () => void;
+  onSkip?: () => void;
 }) {
   const [draft, setDraft] = useState(scenario);
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
+  // Tap-to-rank order; anything not tapped keeps its current order after.
+  const [ranked, setRanked] = useState<Priority[]>([]);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    heading.current?.focus();
+    heading.current?.focus({ preventScroll: true });
+    window.scrollTo?.(0, 0);
   }, [step]);
   const q = questionFor(draft.objective) ?? "when";
-  const base = steps[step - 1];
+  const base = step >= 1 && step <= money.length ? money[step - 1] : null;
   const current =
-    base && step === steps.length
+    base && step === money.length
       ? {
           ...base,
           fields: base.fields.filter(([k]) => homeFields[q].includes(k)),
         }
       : base;
-  const choose = (k: Question) => {
-    setDraft((old) => applyQuestion(old, k));
-    setStep(1);
+  const order = [
+    ...ranked,
+    ...draft.priorities.filter((p) => !ranked.includes(p)),
+  ];
+  const go = (n: number) => {
+    setError("");
+    setStep(n);
   };
   const change = (key: keyof Profile, value: number) =>
-    setDraft((old) => ({ ...old, profile: { ...old.profile, [key]: value } }));
-  const next = (form: HTMLFormElement) => {
+    setDraft((old) => {
+      const profile = { ...old.profile, [key]: value };
+      if (key === "flexible") profile.flexibleTarget = value;
+      return { ...old, profile };
+    });
+  const toggleRank = (k: Priority) =>
+    setRanked((r) => (r.includes(k) ? r.filter((x) => x !== k) : [...r, k]));
+  const toggleLever = (k: Lever) =>
+    setDraft((old) => ({
+      ...old,
+      ranges: {
+        ...old.ranges,
+        [k]: { ...old.ranges[k], locked: !old.ranges[k].locked },
+      },
+    }));
+  const finish = () => {
+    const p = draft.profile;
+    const done = applyQuestion({ ...draft, priorities: order }, q);
+    onComplete({
+      ...done,
+      profile: {
+        ...p,
+        downMode: "percent",
+        raiseSalary: Math.max(p.raiseSalary, p.salary),
+      },
+      ranges: {
+        ...done.ranges,
+        salary: {
+          ...done.ranges.salary,
+          min: p.salary,
+          max: Math.max(p.salary * 1.5, p.salary + 20000),
+        },
+        spending: {
+          ...done.ranges.spending,
+          min: Math.round(p.flexible * 0.3),
+          max: p.flexible,
+        },
+        // "How much can I afford" must be free to move the price.
+        price: {
+          ...done.ranges.price,
+          locked: q === "afford" ? false : draft.ranges.price.locked,
+        },
+      },
+    });
+  };
+  const submitMoney = (form: HTMLFormElement) => {
     if (!form.reportValidity()) return;
     const p = draft.profile;
     if (step >= 2 && p.rent + p.debtPayment + p.flexible > p.expenses) {
       setError(
         p.rent > p.expenses
           ? "Rent cannot exceed the total spending that includes it."
-          : "Rent, debt payments and flexible spending cannot add up to more than your total spending.",
+          : "Rent, flexible spending and debt payments cannot add up to more than your total spending.",
       );
       return;
     }
-    setError("");
-    if (step < steps.length) {
-      setStep(step + 1);
-      return;
-    }
-    const salary = draft.profile.salary;
-    const done = applyQuestion(draft, q);
-    onComplete({
-      ...done,
-      profile: {
-        ...draft.profile,
-        downMode: "percent",
-        raiseSalary: Math.max(draft.profile.raiseSalary, salary),
-      },
-      ranges: {
-        ...draft.ranges,
-        salary: {
-          ...draft.ranges.salary,
-          min: salary,
-          max: Math.max(salary * 1.5, draft.ranges.salary.max),
-        },
-        spending: {
-          ...draft.ranges.spending,
-          min: Math.min(draft.ranges.spending.min, draft.profile.flexible),
-          max: draft.profile.flexible,
-        },
-      },
-    });
+    go(step + 1);
   };
+  const title =
+    step === 0
+      ? "What do you want to know?"
+      : step === PRIORITIES
+        ? "What matters most to you?"
+        : step === OPTIONS
+          ? "What are you willing to change?"
+          : current!.title;
+  const intro =
+    step === 0
+      ? "Answer a few short questions and North Star will tell you when you can buy a home, and what would get you there sooner. Nothing leaves your browser."
+      : step === PRIORITIES
+        ? "Tap them in order, most important first. We'll use this to choose between plans that work."
+        : step === OPTIONS
+          ? "Pick everything you'd consider. We'll only suggest changes you're open to."
+          : current!.intro;
+  const back = step > 0 && (
+    <button type="button" className="secondary" onClick={() => go(step - 1)}>
+      Back
+    </button>
+  );
   return (
-    <section className="setup" aria-labelledby="setup-heading">
-      <div className="setup-side">
-        <span className="kicker">
-          <Icon name="star" /> Get started
+    <section className="wizard" aria-labelledby="setup-heading">
+      <div className="wizard-top">
+        <span className="brand-mark" aria-hidden="true">
+          <Icon name="star" />
         </span>
-        <p className="setup-pitch">
-          Pick your question, answer four short steps, and get a straight
-          answer.
-        </p>
-        <ol className="setup-progress" aria-label="Setup progress">
-          {names.map((x, i) => (
-            <li
-              key={x}
-              aria-current={i === step ? "step" : undefined}
-              className={i < step ? "done" : ""}
-            >
-              <span className="step-dot">
-                {i < step ? <Icon name="check" /> : i + 1}
-              </span>
-              {x}
-            </li>
-          ))}
-        </ol>
-      </div>
-      <div className="setup-card">
         <span className="step-count">
           Step {step + 1} of {names.length}
         </span>
-        <h1 id="setup-heading" ref={heading} tabIndex={-1}>
-          {current ? current.title : "What do you want to know?"}
-        </h1>
-        <p className="setup-intro">
-          {current
-            ? current.intro
-            : "Pick the question that matters most to you. You can switch later."}
-        </p>
-        {!current && (
-          <div className="question-cards">
-            {(Object.keys(questions) as Question[]).map((k) => (
-              <button
-                key={k}
-                className={`question-card ${k === q ? "is-current" : ""}`}
-                onClick={() => choose(k)}
-              >
-                <strong>{questions[k].title}</strong>
-                <span>{questions[k].text}</span>
-                <Icon name="arrow" />
-              </button>
-            ))}
-          </div>
-        )}
-        {!current && onCancel && (
-          <div className="setup-actions">
-            <button type="button" className="ghost" onClick={onCancel}>
-              Cancel setup
-            </button>
-          </div>
-        )}
-        {current && (
-          <form
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              next(ev.currentTarget);
-            }}
-          >
-            <div className="fields" key={step}>
-              {current.fields.map(([key, label, min, max, note]) => (
-                <div key={key} className="field">
-                  <label htmlFor={`setup-${key}`}>{label}</label>
-                  <input
-                    id={`setup-${key}`}
-                    aria-describedby={note ? `setup-${key}-note` : undefined}
-                    required
-                    type="number"
-                    min={min}
-                    max={max}
-                    step={key === "months" ? 1 : 0.01}
-                    value={draft.profile[key] as number}
-                    onChange={(ev) => change(key, Number(ev.target.value))}
-                  />
-                  {note && <small id={`setup-${key}-note`}>{note}</small>}
-                </div>
-              ))}
-            </div>
-            {error && (
-              <p role="alert" className="warning">
-                {error}
-              </p>
-            )}
-            <p className="fine">
-              Example numbers are filled in. Replace them with yours. You can
-              fine-tune everything else later in Advanced settings.
-            </p>
-            <div className="setup-actions">
-              {onCancel && (
-                <button type="button" className="ghost" onClick={onCancel}>
-                  Cancel setup
-                </button>
-              )}
-              <span className="spacer" />
-              {step > 0 && (
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    setStep(step - 1);
-                    setError("");
-                  }}
-                >
-                  Back
-                </button>
-              )}
-              <button className="primary" type="submit">
-                {step === steps.length ? "See my answer" : "Continue"}
-              </button>
-            </div>
-          </form>
+        {onSkip && (
+          <button type="button" className="link" onClick={onSkip}>
+            Skip to my plan
+          </button>
         )}
       </div>
+      <ol className="wizard-bar" aria-label="Setup progress">
+        {names.map((n, i) => (
+          <li
+            key={n}
+            aria-current={i === step ? "step" : undefined}
+            className={i < step ? "done" : ""}
+          >
+            <span className="sr-only">{n}</span>
+          </li>
+        ))}
+      </ol>
+      <h1 id="setup-heading" ref={heading} tabIndex={-1}>
+        {title}
+      </h1>
+      <p className="setup-intro">{intro}</p>
+
+      {step === 0 && (
+        <div className="question-cards">
+          {(Object.keys(questions) as Question[]).map((k) => (
+            <button
+              key={k}
+              className={`question-card ${k === q ? "is-current" : ""}`}
+              onClick={() => {
+                setDraft((old) => applyQuestion(old, k));
+                go(1);
+              }}
+            >
+              <strong>{questions[k].title}</strong>
+              <span>{questions[k].text}</span>
+              <Icon name="arrow" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {current && (
+        <form
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            submitMoney(ev.currentTarget);
+          }}
+        >
+          <div className="fields" key={step}>
+            {current.fields.map(([key, label, min, max, note]) => (
+              <div key={key} className="field">
+                <label htmlFor={`setup-${key}`}>{label}</label>
+                <input
+                  id={`setup-${key}`}
+                  aria-describedby={note ? `setup-${key}-note` : undefined}
+                  required
+                  type="number"
+                  min={min}
+                  max={max}
+                  step={key === "months" ? 1 : 0.01}
+                  value={draft.profile[key] as number}
+                  onChange={(ev) => change(key, Number(ev.target.value))}
+                />
+                {note && <small id={`setup-${key}-note`}>{note}</small>}
+              </div>
+            ))}
+          </div>
+          {error && (
+            <p role="alert" className="warning">
+              {error}
+            </p>
+          )}
+          {step === 1 && (
+            <p className="fine">
+              Example numbers are filled in. Replace them with yours.
+            </p>
+          )}
+          <div className="setup-actions">
+            {back}
+            <span className="spacer" />
+            <button className="primary" type="submit">
+              Continue
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === PRIORITIES && (
+        <>
+          <ol className="rank-list" aria-label="Your priorities">
+            {order.map((k) => {
+              const n = ranked.indexOf(k);
+              return (
+                <li key={k}>
+                  <button
+                    type="button"
+                    aria-pressed={n >= 0}
+                    className={n >= 0 ? "is-ranked" : ""}
+                    onClick={() => toggleRank(k)}
+                  >
+                    <span className="rank">{n >= 0 ? n + 1 : ""}</span>
+                    {priorityLabels[k]}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          <div className="setup-actions">
+            {back}
+            {ranked.length > 0 && (
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setRanked([])}
+              >
+                Clear
+              </button>
+            )}
+            <span className="spacer" />
+            <button className="primary" onClick={() => go(OPTIONS)}>
+              Continue
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === OPTIONS && (
+        <>
+          <div className="option-list">
+            {flexOptions
+              .filter((o) => !(o.lever === "price" && q === "afford"))
+              .map((o) => (
+                <label key={o.lever} className="option">
+                  <input
+                    type="checkbox"
+                    checked={!draft.ranges[o.lever].locked}
+                    onChange={() => toggleLever(o.lever)}
+                  />
+                  <span>
+                    <strong>{o.label}</strong>
+                    <small>{o.text}</small>
+                  </span>
+                </label>
+              ))}
+          </div>
+          <div className="setup-actions">
+            {back}
+            <span className="spacer" />
+            <button className="primary" onClick={finish}>
+              See my answer <Icon name="arrow" />
+            </button>
+          </div>
+        </>
+      )}
     </section>
   );
 }
